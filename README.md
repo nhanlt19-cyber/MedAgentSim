@@ -57,14 +57,14 @@ Key features:
 ### Prerequisites
 
 ```bash
-# Clone the repository
-git clone https://github.com/MAXNORM8650/MedAgentSim.git
-cd MedAgentSim
-pip install e .
 # Set up a virtual environment (recommended)
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
+# Clone the repository
+git clone https://github.com/MAXNORM8650/MedAgentSim.git
+cd MedAgentSim
+pip install e .
 # Install dependencies
 pip install -r requirements.txt
 ```
