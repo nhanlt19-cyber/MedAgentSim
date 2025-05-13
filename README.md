@@ -155,14 +155,11 @@ This project is licensed under the Creative Commons Attribution-NonCommercial-Sh
 If you use MedAgentSim in your research, please cite our paper:
 
 ```bibtex
-@misc{almansoori2025selfevolvingmultiagentsimulationsrealistic,
-      title={Self-Evolving Multi-Agent Simulations for Realistic Clinical Interactions}, 
-      author={Mohammad Almansoori and Komal Kumar and Hisham Cholakkal},
-      year={2025},
-      eprint={2503.22678},
-      archivePrefix={arXiv},
-      primaryClass={cs.CL},
-      url={https://arxiv.org/abs/2503.22678}, 
+@inproceedings{almansooriandkumarMedAgentSim,
+  title={Self-Evolving Multi-Agent Simulations for Realistic Clinical Interactions},
+  author={Mohammad Almansoori and Komal Kumar and Hisham Cholakkal},
+  booktitle={International Conference on Medical Image Computing and Computer-Assisted Intervention},
+  year={2025}
 }
 ```
 ## 🙏 Acknowledgements
