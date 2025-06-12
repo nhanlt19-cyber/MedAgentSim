@@ -1,4 +1,4 @@
-"https://github.com/samuelschmidgall/agentclinic"
+"https://github.com/samuelschmidgall/"
 
 import json
 import random
@@ -30,7 +30,7 @@ class ScenarioMedQA:
 
 class ScenarioLoaderMedQA:
     def __init__(self) -> None:
-        with open("./datasets/agentclinic_medqa.jsonl", "r") as f:
+        with open("./datasets/_medqa.jsonl", "r") as f:
             self.scenario_strs = [json.loads(line) for line in f]
         self.scenarios = [ScenarioMedQA(_str) for _str in self.scenario_strs]
         self.num_scenarios = len(self.scenarios)
@@ -70,7 +70,7 @@ class ScenarioMedQAExtended:
 
 class ScenarioLoaderMedQAExtended:
     def __init__(self) -> None:
-        with open(f".datasets/agentclinic_medqa_extended.jsonl", "r") as f:
+        with open(f".datasets/_medqa_extended.jsonl", "r") as f:
             self.scenario_strs = [json.loads(line) for line in f]
         self.scenarios = [ScenarioMedQAExtended(_str) for _str in self.scenario_strs]
         self.num_scenarios = len(self.scenarios)
@@ -110,7 +110,7 @@ class ScenarioMIMICIVQA:
 
 class ScenarioLoaderMIMICIV:
     def __init__(self) -> None:
-        with open(f".\\datasets/datasetsagentclinic_mimiciv.jsonl", "r") as f:
+        with open(f".\\datasets/datasets_mimiciv.jsonl", "r") as f:
             self.scenario_strs = [json.loads(line) for line in f]
         self.scenarios = [ScenarioMIMICIVQA(_str) for _str in self.scenario_strs]
         self.num_scenarios = len(self.scenarios)
@@ -150,7 +150,7 @@ class ScenarioNEJMExtended:
 
 class ScenarioLoaderNEJMExtended:
     def __init__(self) -> None:
-        with open(f".\\datasets/datasetsagentclinic_nejm_extended.jsonl", "r") as f:
+        with open(f".\\datasets/datasets_nejm_extended.jsonl", "r") as f:
             self.scenario_strs = [json.loads(line) for line in f]
         self.scenarios = [ScenarioNEJMExtended(_str) for _str in self.scenario_strs]
         self.num_scenarios = len(self.scenarios)
@@ -190,7 +190,7 @@ class ScenarioNEJM:
 
 class ScenarioLoaderNEJM:
     def __init__(self) -> None:
-        with open("./datasets/agentclinic_nejm.jsonl", "r") as f:
+        with open("./datasets/_nejm.jsonl", "r") as f:
             self.scenario_strs = [json.loads(line) for line in f]
         self.scenarios = [ScenarioNEJM(_str) for _str in self.scenario_strs]
         self.num_scenarios = len(self.scenarios)

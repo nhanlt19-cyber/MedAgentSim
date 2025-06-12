@@ -1,7 +1,11 @@
 import argparse
-from agent import *
-from MultiAgent.AgentClinic.scenario import *
-from query import *
+import os
+import json
+import time
+import openai
+from medsim.core.agent import MeasurementAgent, PatientAgent, DoctorAgent
+from medsim.core.scenario import *
+from medsim.query_model import *
 def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor_llm, patient_llm,
          measurement_llm, moderator_llm, num_scenarios, dataset, img_request, total_inferences,
          anthropic_api_key=None):
@@ -154,3 +158,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     main(args.openai_api_key, args.replicate_api_key, args.inf_type, args.doctor_bias, args.patient_bias, args.doctor_llm, args.patient_llm, args.measurement_llm, args.moderator_llm, args.num_scenarios, args.agent_dataset, args.doctor_image_request, args.total_inferences, args.anthropic_api_key)
+
+
+## terminal running bash
+# python medsim/main.py --inf_type llm --doctor_bias None --patient_bias None --doctor_llm meta-llama/Llama-3.3-70B-Instruct --patient_llm meta-llama/Llama-3.3-70B-Instruct --measurement_llm meta-llama/Llama-3.3-70B-Instruct --moderator_llm meta-llama/Llama-3.3-70B-Instruct --agent_dataset MedQA --doctor_image_request False --num_scenarios 10 --total_inferences 20

@@ -14,12 +14,12 @@ import time
 import torch
 import transformers
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, pipeline
-
+from medsim.query_model import BAgent
 # from Lcgent import LBAgent
 
 
-class BAgent:
-    def __init__(self, model_name="Qwen/Qwen2.5-0.5B-Instruct", loaded=True):
+class BAAgent:
+    def __init__(self, model_name="Qwen/Qwen2.5-0.5B-Instruct", loaded=False):
         """
         Initialize the BAgent class. Load the model and tokenizer if a model name is provided.
         If a Hugging Face pipeline is passed, use it directly.
@@ -72,7 +72,7 @@ class BAgent:
         max_prompt_len=2**14,
         clip_prompt=False,
         thread_id = 1
-    ):
+    ):  
         for attempt in range(tries):
             if clip_prompt:
                 prompt = prompt[:max_prompt_len]

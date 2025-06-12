@@ -67,6 +67,13 @@ cd MedAgentSim
 pip install e .
 # Install dependencies
 pip install -r requirements.txt
+# Ensure
+pip install --upgrade torch torchao torchvision transformers
+pip install --upgrade openai
+python -m pip install replicate
+python -m pip install  anthropic
+python -m pip install groq
+python -m pip install accelerate
 ```
 
 ### Running the Simulation

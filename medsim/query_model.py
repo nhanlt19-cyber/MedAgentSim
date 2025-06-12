@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 class BAgent:
-    def __init__(self, model_name="mistralai/Mistral-Small-24B-Instruct-2501", server_url="http://gpu-24:8000/v1/chat/completions"):
+    def __init__(self, model_name="meta-llama/Llama-3.1-70B-Instruct", server_url="http://localhost:8000/v1/chat/completions"):
         """
         Initializes the BAgent:
         - Uses vLLM server if available.
