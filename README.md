@@ -121,6 +121,21 @@ MedAgentSim has been evaluated on several medical benchmarks:
 | MedQA Extended | Extended diagnostic scenarios | 214 |
 | MIMIC-IV | Real-world clinical cases | 288 |
 
+1.	Launch the vLLM server (with appropriate GPUs):
+```bash
+CUDA_VISIBLE_DEVICES=0,1,2,3 vllm serve meta-llama/Llama-3.1-70B-Instruct \
+    --tensor-parallel-size 4 \
+    --max-model-len 8192
+```
+2.	Run the simulation:
+```bash
+python medsim/main.py \
+    --doctor_llm meta-llama/Llama-3.1-70B-Instruct \
+    --patient_llm meta-llama/Llama-3.1-70B-Instruct \
+    --measurement_llm meta-llama/Llama-3.1-70B-Instruct \
+    --moderator_llm meta-llama/Llama-3.1-70B-Instruct \
+    --agent_dataset MedQA
+```
 ## 🧩 Project Structure
 
 ```
