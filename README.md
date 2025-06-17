@@ -185,8 +185,12 @@ If you use MedAgentSim in your research, please cite our paper:
 }
 ```
 ## 🙏 Acknowledgements
-- Thanks to [AgentClinic](https://github.com/samuelschmidgall/agentclinic) and [Microsoft PromptBase](https://github.com/microsoft/promptbase) for open-sourcing their works
+- Thanks to [AgentClinic](https://github.com/samuelschmidgall/agentclinic), [Microsoft PromptBase](https://github.com/microsoft/promptbase), and [Generative Agents](https://github.com/joonspk-research/generative_agents) for open-sourcing their works
 - Mohamed bin Zayed University of Artificial Intelligence for supporting this research
+- We encourage you to support the following three talented artists whose assets were used in this project, especially if you are planning to use the assets included here for your own project: 
+  * Background art: [PixyMoon (@_PixyMoon\_)](https://twitter.com/_PixyMoon_)
+  * Furniture/interior design: [LimeZu (@lime_px)](https://twitter.com/lime_px)
+  * Character design: [ぴぽ (@pipohi)](https://twitter.com/pipohi)
 ## Other Resources
 - Open-source multi-agent framework: [CAMEL-AI OWL](https://github.com/camel-ai/owl)
 - Multi-agent framework: [OpenMANAUS](https://github.com/mannaandpoem/OpenManus)
