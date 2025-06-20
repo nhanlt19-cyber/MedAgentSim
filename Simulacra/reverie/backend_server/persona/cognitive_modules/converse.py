@@ -26,7 +26,7 @@ from persona.prompt_template.run_gpt_prompt import *
 # Add the TOQ directory to sys.path
 # Dynamically add the TOQ directory to sys.path
 current_file_dir = os.path.dirname(os.path.abspath(__file__))  # Directory of converse.py
-toq_dir = os.path.abspath(os.path.join(current_file_dir, "../../../../../TOQ"))
+toq_dir = os.path.abspath(os.path.join(current_file_dir, "../../../../../medsim"))
 # toq_dir = os.path.abspath("../../../../../TOQ")
 print(f"Resolved TOQ directory: {toq_dir}")
 if toq_dir not in sys.path:
@@ -237,7 +237,7 @@ def update_sim_info(is_correct):
 
 def generate_chat_v3(total_scenarios, total_correct, num_scenarios, scenario_id):
   current_file_dir = os.path.dirname(os.path.abspath(__file__))
-  config_path = os.path.join(current_file_dir, "../../../../..", "TOQ/configs/config_sim.yaml")
+  config_path = os.path.join(current_file_dir, "../../../../..", "configs/config_sim.yaml")
   config = load_config(config_path)
 
   working_dir = os.getcwd()
@@ -254,7 +254,7 @@ def agent_chat_v3(doctor_name, patient_name):
   update_sim_info(is_correct)
   
   current_file_dir = os.path.dirname(os.path.abspath(__file__))
-  json_paths = os.path.join(current_file_dir, "../../../../..", "TOQ/output")
+  json_paths = os.path.join(current_file_dir, "../../../../..", "output")
   print(json_paths)
   json_files = glob.glob(os.path.join(json_paths, "*.json"))
 

@@ -25,7 +25,7 @@ def import_bagent():
     # Get absolute path of current file
     current_file = os.path.abspath(__file__)
 
-    # Move up to project root (TOQ/)
+# Move up to project root (TOQ/)
     root_dir = os.path.abspath(os.path.join(current_file, "../../../../.."))
 
     # Add the inner TOQ/TOQ to path so we can import query_model
@@ -34,7 +34,7 @@ def import_bagent():
         sys.path.append(toq_path)
 
     # Import the module and return the class
-    module = import_module("query_model")  # NOT "medsim.query_model" since TOQ is now in sys.path
+    module = import_module("medsim.query_model")  # NOT "medsim.query_model" since TOQ is now in sys.path
     return module.BAgent
 
 # def setup_client(type: str, config: dict):

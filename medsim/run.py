@@ -7,7 +7,7 @@ from typing import Tuple, Optional
 
 import openai
 import yaml
-from agent import (
+from medsim.core.agent import (
     MeasurementAgent,
     PatientAgent,
     DoctorAgent,
@@ -15,7 +15,7 @@ from agent import (
     compare_results,
 )
 # from Lcgent import LBAgent
-from scenario import (
+from medsim.core.scenario import (
     ScenarioLoaderMedQA,
     ScenarioLoaderMedQAExtended,
     ScenarioLoaderNEJM,
@@ -23,8 +23,7 @@ from scenario import (
     ScenarioLoaderMIMICIV,
     resolve_model_name,
 )
-from query import *
-
+#from medsim.core.query import * 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
