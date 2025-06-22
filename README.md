@@ -85,7 +85,7 @@ python -m medsim.server
 # In a separate terminal, launch the client
 python -m medsim.simulate --doctor_llm meta-llama/Llama-3.2-3B-Instruct --patient_llm meta-llama/Llama-3.2-3B-Instruct --measurement_llm meta-llama/Llama-3.2-3B-Instruct --moderator_llm meta-llama/Llama-3.2-3B-Instruct
 ```
-Visit `http://localhost:8000/simulator` in your browser.
+Visit `http://localhost:8000/simulator_home` in your browser.
 ### Host models using vLLM to query
 ```bash 
 vllm serve unsloth/Llama-3.2-11B-Vision-Instruct-unsloth-bnb-4bit --dtype 'auto'  --quantization "bitsandbytes" --load_format "bitsandbytes" --tensor-parallel-size 4 --max-model-len 8192 --limit-mm-per-prompt image=1
