@@ -16,7 +16,7 @@ import os
 import sys
 from importlib import import_module
 
-config_path = Path("../../openai_config.json")
+config_path = Path("../../depricated_config.json")
 with open(config_path, "r") as f:
     openai_config = json.load(f) 
 
