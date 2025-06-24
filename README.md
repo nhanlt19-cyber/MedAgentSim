@@ -57,13 +57,11 @@ Key features:
 ### Prerequisites
 
 ```bash
-# Set up a virtual environment (recommended)
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
 # Clone the repository
 git clone https://github.com/MAXNORM8650/MedAgentSim.git
 cd MedAgentSim
+conda env create -f environment.yml
+conda activate mgent
 pip install e .
 # Install dependencies
 pip install -r requirements.txt
@@ -74,6 +72,8 @@ python -m pip install replicate
 python -m pip install  anthropic
 python -m pip install groq
 python -m pip install accelerate
+python -m pip install openai-cost-tracker
+python -m pip install django==2.2
 ```
 
 ### Running the Simulation
