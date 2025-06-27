@@ -83,7 +83,7 @@ python -m pip install django==2.2
 python -m medsim.server
 
 # In a separate terminal, launch the client
-python -m medsim.simulate --doctor_llm meta-llama/Llama-3.2-3B-Instruct --patient_llm meta-llama/Llama-3.2-3B-Instruct --measurement_llm meta-llama/Llama-3.2-3B-Instruct --moderator_llm meta-llama/Llama-3.2-3B-Instruct
+python -u -m medsim.simulate --doctor_llm meta-llama/Llama-3.2-3B-Instruct --patient_llm meta-llama/Llama-3.2-3B-Instruct --measurement_llm meta-llama/Llama-3.2-3B-Instruct --moderator_llm meta-llama/Llama-3.2-3B-Instruct
 ```
 Visit `http://localhost:8000/simulator_home` in your browser.
 ### Host models using vLLM to query
