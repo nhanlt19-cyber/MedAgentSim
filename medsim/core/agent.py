@@ -14,7 +14,7 @@ import time
 import torch
 import transformers
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, pipeline
-from medsim.query_model import BAgent
+from medsim.query_model import BAgent, extract_question, generate_question_json, generate_possible_diagnoses, generate_answer_choices, generate_question_json, import_generate, get_diagnosis
 # from Lcgent import LBAgent
 
 
@@ -545,17 +545,17 @@ class DoctorAgent:
             response = self.pipe.query_model(prompt, self.col_system_prompt(), image_requested=image_requested, scene=self.scenario, thread_id = thread_id)
             responses.append(f"Doctor {i}: {response.strip()}")
 
-        question = self.extract_question(patient_statement, self.agent_hist, "\n".join(responses))
+        question = extract_question(patient_statement, self.agent_hist, "\n".join(responses), self.backend)
         answer = self.scenario.diagnosis_information()
-        answer_list = self.generate_possible_diagnoses(question, answer)
-        answer_choices, correct_answer = self.generate_answer_choices(answer, answer_list)
-        self.generate_question_json(question, answer_choices, correct_answer)
+        answer_list = generate_possible_diagnoses(question, answer, self.backend)
+        answer_choices, correct_answer = generate_answer_choices(answer, answer_list)
+        generate_question_json(question, answer_choices, correct_answer)
 
-        generate_single = self.import_generate() # mmlu
+        generate_single = import_generate() # mmlu
         generate_single('temp_question.json')
 
         # generate prediction from mmlu
-        diagnosis_pred = self.get_diagnosis()
+        diagnosis_pred = get_diagnosis()
 
         # Final consensus based on discussion
         consensus_prompt = (f"The following discussion occurred among doctors:\n\n" + "\n".join(responses) + f"\n\nAnd you have come to the conclusion that the correct diagnosis is: {diagnosis_pred}" + "\n\nBased on this discussion and findings, provide a Final Diagnosis.")

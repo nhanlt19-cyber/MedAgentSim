@@ -1,8 +1,24 @@
-"https://github.com/samuelschmidgall/agentclinic"
+"https://github.com/samuelschmidgall/"
 
 import json
 import random
 import os
+
+from pathlib import Path
+
+def resolve_dataset_path(input_path: str, dataset: str) -> Path:
+    input_path = Path(input_path).resolve()
+    parts = input_path.parts
+
+    if "MedAgentSim" not in parts:
+        raise ValueError("Path does not contain 'MedAgentSim'")
+
+    # Get everything up to and including MedAgentSim
+    medagent_index = parts.index("MedAgentSim")
+    project_root = Path(*parts[:medagent_index + 1])
+
+    # Append datasets/_medqa.jsonl
+    return project_root / "datasets" / dataset
 
 class ScenarioMedQA:
     def __init__(self, scenario_dict) -> None:
@@ -30,7 +46,9 @@ class ScenarioMedQA:
 
 class ScenarioLoaderMedQA:
     def __init__(self) -> None:
-        with open("./datasets/agentclinic_medqa.jsonl", "r") as f:
+        project_root = Path(os.getcwd())
+        data_path = resolve_dataset_path(project_root, "_medqa.jsonl")
+        with open(data_path, "r") as f:
             self.scenario_strs = [json.loads(line) for line in f]
         self.scenarios = [ScenarioMedQA(_str) for _str in self.scenario_strs]
         self.num_scenarios = len(self.scenarios)
@@ -70,7 +88,9 @@ class ScenarioMedQAExtended:
 
 class ScenarioLoaderMedQAExtended:
     def __init__(self) -> None:
-        with open(f".datasets/agentclinic_medqa_extended.jsonl", "r") as f:
+        project_root = Path(os.getcwd())
+        data_path = resolve_dataset_path(project_root, "_medqa_extended.jsonl")
+        with open(data_path, "r") as f:
             self.scenario_strs = [json.loads(line) for line in f]
         self.scenarios = [ScenarioMedQAExtended(_str) for _str in self.scenario_strs]
         self.num_scenarios = len(self.scenarios)
@@ -110,7 +130,9 @@ class ScenarioMIMICIVQA:
 
 class ScenarioLoaderMIMICIV:
     def __init__(self) -> None:
-        with open(f".\\datasets/datasetsagentclinic_mimiciv.jsonl", "r") as f:
+        project_root = Path(os.getcwd())
+        data_path = resolve_dataset_path(project_root, "datasets_mimiciv.jsonl")
+        with open(data_path, "r") as f:
             self.scenario_strs = [json.loads(line) for line in f]
         self.scenarios = [ScenarioMIMICIVQA(_str) for _str in self.scenario_strs]
         self.num_scenarios = len(self.scenarios)
@@ -150,7 +172,9 @@ class ScenarioNEJMExtended:
 
 class ScenarioLoaderNEJMExtended:
     def __init__(self) -> None:
-        with open(f".\\datasets/datasetsagentclinic_nejm_extended.jsonl", "r") as f:
+        project_root = Path(os.getcwd())
+        data_path = resolve_dataset_path(project_root, "datasets_nejm_extended.jsonl")
+        with open(data_path, "r") as f:
             self.scenario_strs = [json.loads(line) for line in f]
         self.scenarios = [ScenarioNEJMExtended(_str) for _str in self.scenario_strs]
         self.num_scenarios = len(self.scenarios)
@@ -190,7 +214,9 @@ class ScenarioNEJM:
 
 class ScenarioLoaderNEJM:
     def __init__(self) -> None:
-        with open("./datasets/agentclinic_nejm.jsonl", "r") as f:
+        project_root = Path(os.getcwd())
+        data_path = resolve_dataset_path(project_root, "_nejm.jsonl")
+        with open(data_path, "r") as f:
             self.scenario_strs = [json.loads(line) for line in f]
         self.scenarios = [ScenarioNEJM(_str) for _str in self.scenario_strs]
         self.num_scenarios = len(self.scenarios)

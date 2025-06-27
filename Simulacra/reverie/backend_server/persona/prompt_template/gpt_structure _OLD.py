@@ -126,7 +126,7 @@ def ChatGPT_safe_generate_response(prompt,
   prompt += '{"output": "' + str(example_output) + '"}'
 
   if verbose: 
-    print ("CHAT GPT PROMPT")
+    # print ("CHAT GPT PROMPT")
     print (prompt)
 
   for i in range(repeat): 
@@ -158,7 +158,7 @@ def ChatGPT_safe_generate_response_OLD(prompt,
                                    func_clean_up=None,
                                    verbose=False): 
   if verbose: 
-    print ("CHAT GPT PROMPT")
+    # print ("CHAT GPT PROMPT")
     print (prompt)
 
   for i in range(repeat): 

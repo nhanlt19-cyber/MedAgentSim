@@ -11,6 +11,11 @@ import re
 import random
 from query_model import query_model, BAgent, extract_question, generate_possible_diagnoses, generate_answer_choices, generate_question_json, import_generate, get_diagnosis
 # from query import BAgent
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+logger.info("agents")
 fallback_agent = BAgent()
 class PatientAgent:
     """Simulates a patient in the dialogue simulation."""
@@ -333,7 +338,7 @@ class DoctorAgent:
         )
         return base + bias_prompt + presentation
 
-    def inference_doctor(self, patient_response: str, image_requested: bool = False) -> str:
+    def inference_doctor(self, patient_response: str, image_requested: bool = False, scenario_id=0) -> str:
         """
         Queries the language model for the doctor’s next dialogue turn.
         If this is the final inference round (self.infs == self.MAX_INFS - 1),
@@ -344,7 +349,7 @@ class DoctorAgent:
 
         # Final round: trigger multi-agent debate for final diagnosis.
         if self.infs == self.MAX_INFS - 1:
-            return self.internal_discussion(patient_response, image_requested)
+            return self.internal_discussion(patient_response, image_requested, scenario_id)
 
         # Otherwise, proceed with the normal single-agent dialogue turn.
         prompt = (
@@ -366,7 +371,7 @@ class DoctorAgent:
             "summarized as 'DIAGNOSIS READY: [final diagnosis based on majority vote]'."
         )
 
-    def internal_discussion(self, patient_statement, image_requested = None, thread_id=1)->str:
+    def internal_discussion(self, patient_statement, image_requested = None, scenario_id=0, thread_id=1)->str:
         """
         Simulates an internal multi-doctor discussion to refine diagnosis.
 
@@ -398,10 +403,10 @@ class DoctorAgent:
         generate_question_json(question, answer_choices, correct_answer)
 
         generate_single = import_generate() # mmlu
-        generate_single('temp_question.json')
+        generate_single(self.backend, scenario_id, 'temp_question.json')
 
         # generate prediction from mmlu
-        diagnosis_pred = get_diagnosis()
+        diagnosis_pred = get_diagnosis(self.backend, scenario_id)
 
         # Final consensus based on discussion
         consensus_prompt = (f"The following discussion occurred among doctors:\n\n" + "\n".join(responses) + f"\n\nAnd you have come to the conclusion that the correct diagnosis is: {diagnosis_pred}" + "\n\nBased on this discussion and findings, provide a Final Diagnosis.")
@@ -533,3 +538,63 @@ class MeasurementAgent:
         """Resets the measurement agent state."""
         self.agent_hist = ""
         self.information = self.scenario.exam_information()
+
+def compare_results(diagnosis, correct_diagnosis, mod_pipe, similarity_threshold=0.8, tries=3, timeout=5.0):
+    """
+    Compares the doctor's diagnosis with the correct diagnosis using a similarity-based approach.
+
+    Args:
+        diagnosis (str): The diagnosis provided by the doctor.
+        correct_diagnosis (str): The correct diagnosis for the case.
+        mod_pipe (BAgent): The initialized moderator instance.
+        similarity_threshold (float): Threshold for similarity to decide "Yes". Defaults to 0.8.
+        tries (int): Number of retry attempts. Defaults to 3.
+        timeout (float): Time in seconds between retries. Defaults to 5.0.
+
+    Returns:
+        tuple: (decision (str), similarity (float))
+    """
+    prompt = (
+        f"Here is the correct diagnosis: {correct_diagnosis}\n"
+        f"Here was the doctor's diagnosis: {diagnosis}\n"
+        f"Rate the similarity between the two diagnoses on a scale of 0 to 1, where 0 means completely dissimilar and 1 means identical. "
+        f"Based on the similarity score, decide whether they match. Respond strictly in the format:\n"
+        f"[0.XX]\n"
+        f"Do not include any additional text or explanation."
+    )
+    system_prompt = (
+        "You are a medical moderator responsible for assessing similarity between two diagnoses. "
+        "Respond strictly in the format [0.XX] where 0.XX is similarity. Do not include any extra text."
+    )
+    # breakpoint()
+    for attempt in range(tries):
+        try:
+            # Query the model
+            response = mod_pipe.query_model(prompt=prompt, system_prompt=system_prompt, tries=1, timeout=timeout)
+            print(f"Attempt {attempt + 1} response: {response}")
+
+            # Extract response
+            if response.startswith("[") and response.endswith("]"):
+                similarity_str = response[1:-1]  # Remove square brackets
+                # similarity_str, decision_str = response_content.split(",")
+                
+                # Parse similarity and decision
+                similarity = float(similarity_str)
+                # decision = decision_str.split(":")[1].strip().lower()
+
+                # Validate response
+                if 0 <= similarity <= 1:
+                    return similarity>=similarity_threshold
+                else:
+                    print(f"Invalid similarity score: {similarity}")
+
+            else:
+                print(f"Response not in expected format: {response}")
+
+        except Exception as e:
+            print(f"Attempt {attempt + 1} failed with error: {e}")
+
+        # Wait before retrying
+        time.sleep(timeout)
+
+    raise Exception("Failed to compare results after multiple attempts.")

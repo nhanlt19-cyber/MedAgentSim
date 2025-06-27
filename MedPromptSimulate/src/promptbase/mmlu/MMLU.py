@@ -136,13 +136,19 @@ Answer: [C]""",
     ],
 }
 
+def safe_deepcopy_prompt_dict(d: dict) -> dict:
+    """Deepcopy a dictionary that includes a Liquid BoundTemplate under key 'prompt'."""
+    d_copy = {k: v for k, v in d.items() if k != "prompt"}
+    result = copy.deepcopy(d_copy)
+    result["prompt"] = d["prompt"]  # Reattach without copying
+    return result
 
 def generate_solutions_without_rank(
     problem_name, run_name=None, model="gpt-4-1106-preview", subset_type="train", backend=None
 ):
     if run_name is None:
         run_name = f"{problem_name}/cot_without_rank"
-    options = copy.deepcopy(cot_without_rank)
+    options = safe_deepcopy_prompt_dict(cot_without_rank)
     options["problems"] = problem_name
     options["name"] = run_name
     options["num_examples"] = 5

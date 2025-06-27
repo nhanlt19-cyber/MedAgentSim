@@ -93,6 +93,11 @@ def import_bagent():
 BAgent = import_bagent()
 backend = BAgent()
 
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+logger.info("gpt_struct")
+
 def temp_sleep(seconds=0.1):
   time.sleep(seconds)
 
@@ -148,7 +153,7 @@ def ChatGPT_safe_generate_response(prompt,
   prompt += '{"output": "' + str(example_output) + '"}'
 
   if verbose: 
-    print ("CHAT GPT PROMPT")
+    # print ("CHAT GPT PROMPT")
     print (prompt)
 
   for i in range(repeat): 
@@ -180,7 +185,7 @@ def ChatGPT_safe_generate_response_OLD(prompt,
                                    func_clean_up=None,
                                    verbose=False): 
   if verbose: 
-    print ("CHAT GPT PROMPT")
+    # print ("CHAT GPT PROMPT")
     print (prompt)
 
   for i in range(repeat): 
@@ -273,6 +278,8 @@ def safe_generate_response(prompt,
 
   for i in range(repeat): 
     curr_gpt_response = GPT_request(prompt, gpt_parameter)
+    # print("########## GPT RESPONSE ##########")
+    # print(curr_gpt_response)
     try:
       if func_validate(curr_gpt_response, prompt=prompt): 
         return func_clean_up(curr_gpt_response, prompt=prompt)

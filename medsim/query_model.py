@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 class BAgent:
-    def __init__(self, model_name="meta-llama/Llama-3.1-70B-Instruct", server_url="http://localhost:8012/v1/chat/completions"):
+    def __init__(self, model_name="meta-llama/Llama-3.3-70B-Instruct", server_url="http://10.127.30.115:8012/v1/chat/completions"):
         """
         Initializes the BAgent:
         - Uses vLLM server if available.
@@ -87,7 +87,13 @@ class BAgent:
                 logger.error(f"Unexpected error during model loading: {e}")
                 raise
 
-    def query_model(self, prompt, system_prompt="You are a helpful assistant.", tries=5, timeout=5.0, image_requested=False, scene=None, max_prompt_len=2500, clip_prompt=False, thread_id=1):
+    # def query_model(self, prompt, system_prompt="You are a helpful assistant.", tries=5, timeout=5.0, image_requested=False, scene=None, max_prompt_len=2500, clip_prompt=False, thread_id=1):
+    #     """Queries the vLLM server if available, otherwise uses local model."""
+    #     if self.use_server:
+    #         return self._query_server(prompt, system_prompt, tries, timeout)
+    #     return self._query_local(prompt, system_prompt, image_requested, scene, max_prompt_len, clip_prompt, tries, timeout)
+    
+    def query_model(self, prompt, system_prompt="You are a helpful assistant.", tries=5, timeout=120, image_requested=False, scene=None, max_prompt_len=2500, clip_prompt=False, thread_id=1):
         """Queries the vLLM server if available, otherwise uses local model."""
         if self.use_server:
             return self._query_server(prompt, system_prompt, tries, timeout)
@@ -431,6 +437,7 @@ def query_model(model_str: str,
                 answer = re.sub(r"\s+", " ", answer)
 
             else:
+                # logger.info("################ AAAAAAAAAAAAAAAAAAAA ##################")
                 # Fallback to the baseline agent if none of the above match.
                 answer = fallback_agent.query_model(prompt, system_prompt)
 
@@ -483,9 +490,9 @@ def get_result_json():
 
     return json_data
 
-def get_diagnosis():
+def get_diagnosis(backend, scenario_id):
     generate_single = import_generate() # mmlu
-    generate_single("temp_question.json")
+    generate_single(backend, scenario_id, "temp_question.json")
 
     # Usage Example
     result_json = get_result_json()

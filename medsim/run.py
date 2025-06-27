@@ -7,7 +7,7 @@ from typing import Tuple, Optional
 
 import openai
 import yaml
-from medsim.core.agent import (
+from medsim.agents import (
     MeasurementAgent,
     PatientAgent,
     DoctorAgent,
@@ -31,7 +31,7 @@ logging.basicConfig(
     handlers=[logging.FileHandler("simulation.log"), logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
-
+logger.setLevel(logging.INFO)
 
 def load_config(config_path: str) -> dict:
     """
@@ -179,7 +179,9 @@ def prep(config, total_scenarios, total_correct, num_scenarios, scenario_id):
 
         # Set output directory with timestamp for better organization
         print(config)
-        test_path = f"{os.getcwd()}\\output"#config['scenario']["output_dir"]
+        # test_path = f"{os.getcwd()}\\output"#config['scenario']["output_dir"]
+        test_path = os.path.join(os.path.dirname(os.getcwd()), "output")
+
 
         try:
             os.makedirs(test_path, exist_ok=True)
@@ -394,9 +396,14 @@ def run_simulation_idx(
     Returns:
         Tuple[int, int]: Total correct diagnoses and total scenarios presented.
     """
-    meas_agent = MeasurementAgent(backend_str=measurement_llm)
-    patient_agent = PatientAgent(backend_str=patient_llm)
-    doctor_agent = DoctorAgent(backend_str=doctor_llm, graph=True)
+    scenario = scenario_loader.get_scenario(id=scenario_id)
+    meas_agent = MeasurementAgent(scenario=scenario, backend_str=measurement_llm)
+    patient_agent = PatientAgent(scenario=scenario, backend_str=patient_llm, bias_present=patient_bias)
+    doctor_agent = DoctorAgent(scenario=scenario,
+                               backend_str=doctor_llm,
+                               bias_present=doctor_bias,
+                               max_infs=total_inferences,
+                               img_request=img_request,)
     mpipe = BAgent(moderator_llm)# patient_agent.pipe#BAgent(moderator_llm)
 
     logger.info(f"Starting simulation {total_scenarios} out of {num_scenarios} scenarios.")
@@ -405,15 +412,15 @@ def run_simulation_idx(
     logger.debug(f"Starting scenario {scenario_id}.")
 
     # Initialize scenario and agents
-    scenario = scenario_loader.get_scenario(id=scenario_id)
-    meas_agent.update_scenario(scenario=scenario)
-    patient_agent.update_scenario(scenario=scenario, bias_present=patient_bias)
-    doctor_agent.update_scenario(
-        scenario=scenario,
-        bias_present=doctor_bias,
-        max_infs=total_inferences,
-        img_request=img_request,
-    )
+    # scenario = scenario_loader.get_scenario(id=scenario_id)
+    # meas_agent.update_scenario(scenario=scenario)
+    # patient_agent.update_scenario(scenario=scenario, bias_present=patient_bias)
+    # doctor_agent.update_scenario(
+    #     scenario=scenario,
+    #     bias_present=doctor_bias,
+    #     max_infs=total_inferences,
+    #     img_request=img_request,
+    # )
 
     # Run interaction loop
     is_correct = run_interaction_loop(
@@ -487,7 +494,7 @@ def run_interaction_loop(
             doctor_dialogue = input("\nQuestion for patient: ")
         else:
             doctor_dialogue = doctor_agent.inference_doctor(
-                pi_dialogue, image_requested=imgs_requested, thread_id=inf_id
+                pi_dialogue, image_requested=imgs_requested, scenario_id=scenario_id#, thread_id=inf_id
             )
 
         # Log and store doctor's dialogue
@@ -503,12 +510,11 @@ def run_interaction_loop(
             result = compare_results(
                 doctor_dialogue,
                 scenario.diagnosis_information(),
-                moderator_llm,
                 mpipe,
             )
             is_correct = result
             result_text = f"\nCorrect answer: {scenario.diagnosis_information()}"
-            accuracy = (total_correct + int(is_correct)) / total_scenarios * 100
+            accuracy = (total_correct + int(is_correct)) / (total_scenarios+1) * 100
             scene_text = (
                 f"Scene {scenario_id}, The diagnosis was "
                 f"{'CORRECT' if is_correct else 'INCORRECT'} "

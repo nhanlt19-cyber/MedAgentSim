@@ -237,7 +237,7 @@ def update_sim_info(is_correct):
 
 def generate_chat_v3(total_scenarios, total_correct, num_scenarios, scenario_id):
   current_file_dir = os.path.dirname(os.path.abspath(__file__))
-  config_path = os.path.join(current_file_dir, "../../../../..", "configs/config_sim.yaml")
+  config_path = os.path.abspath(os.path.join(current_file_dir, "../../../../../medsim/configs/config_sim.yaml"))
   config = load_config(config_path)
 
   working_dir = os.getcwd()
@@ -254,9 +254,10 @@ def agent_chat_v3(doctor_name, patient_name):
   update_sim_info(is_correct)
   
   current_file_dir = os.path.dirname(os.path.abspath(__file__))
-  json_paths = os.path.join(current_file_dir, "../../../../..", "output")
-  print(json_paths)
-  json_files = glob.glob(os.path.join(json_paths, "*.json"))
+  json_paths = os.path.abspath(os.path.join(current_file_dir, "../../../../..", "output"))
+  print("Output directory:", json_paths)
+  json_files = glob.glob(os.path.join(json_paths, "**", "*.json"), recursive=True)
+  print("JSON files found:", json_files)
 
   # Extract and print the results
   convo = extract_speaker_text(json_files[idx], doctor_name, patient_name)

@@ -244,9 +244,9 @@ def generate_action_game_object(act_desp, act_address, persona, maze):
     "bed"
   """
   if debug: print ("GNS FUNCTION: <generate_action_game_object>")
-  if not persona.s_mem.get_str_accessible_arena_game_objects(act_address): 
-    return "<random>"
-  return run_gpt_prompt_action_game_object(act_desp, persona, maze, act_address)[0]
+  # if not persona.s_mem.get_str_accessible_arena_game_objects(act_address): 
+  return "<random>"
+  # return run_gpt_prompt_action_game_object(act_desp, persona, maze, act_address)[0]
 
 
 def generate_action_pronunciatio(act_desp, persona): 

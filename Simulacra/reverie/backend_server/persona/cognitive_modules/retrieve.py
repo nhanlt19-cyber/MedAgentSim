@@ -10,6 +10,11 @@ sys.path.append('../../')
 from global_methods import *
 from persona.prompt_template.gpt_structure import *
 
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+logger.info("retrieve")
+
 from numpy import dot
 from numpy.linalg import norm
 

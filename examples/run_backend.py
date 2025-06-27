@@ -62,11 +62,11 @@ def load_scenario_loader(dataset: str):
         logger.error(f"Dataset {dataset} does not exist.")
         raise ValueError(f"Dataset {dataset} does not exist.")
 
-config = load_config(f"{working_dir}\\TOQ\\configs\\config_sim.yaml")
-scenario_loader = load_scenario_loader(config["scenario"]["dataset"])
-actual_num_scenarios = config["scenario"]["num_scenarios"] or scenario_loader.num_scenarios
+# config = load_config(f"{working_dir}\\medsim\\configs\\config_sim.yaml")
+# scenario_loader = load_scenario_loader(config["scenario"]["dataset"])
+# actual_num_scenarios = config["scenario"]["num_scenarios"] or scenario_loader.num_scenarios
 
-print(actual_num_scenarios)
+# print(actual_num_scenarios)
 
 def run_backend_server(target, stop_event):
     # Configuration

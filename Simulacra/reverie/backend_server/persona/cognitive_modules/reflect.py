@@ -18,6 +18,11 @@ from persona.prompt_template.run_gpt_prompt import *
 from persona.prompt_template.gpt_structure import *
 from persona.cognitive_modules.retrieve import *
 
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+logger.info("reflect")
+
 def generate_focal_points(persona, n=3): 
   if debug: print ("GNS FUNCTION: <generate_focal_points>")
   

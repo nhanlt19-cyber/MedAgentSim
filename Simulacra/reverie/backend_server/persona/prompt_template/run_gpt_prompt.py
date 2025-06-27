@@ -16,6 +16,12 @@ from global_methods import *
 from persona.prompt_template.gpt_structure import *
 from persona.prompt_template.print_prompt import *
 
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+# logger.info("run_gpt_prompt")
+print("run_gpt_prompt", flush=True)
+
 def get_random_alphanumeric(i=6, j=6): 
   """
   Returns a random alpha numeric strength that has the length of somewhere
@@ -653,12 +659,15 @@ def run_gpt_prompt_action_sector(action_description,
   fail_safe = get_fail_safe()
   # output = safe_generate_response(prompt, gpt_param, 5, fail_safe,
   #                                  __func_validate, __func_clean_up)
-  output = "Hospital"
+  # output = "Hospital"
+  # logger.info(output)
+  # logger.info("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB")
   y = f"{maze.access_tile(persona.scratch.curr_tile)['world']}"
   x = [i.strip() for i in persona.s_mem.get_str_accessible_sectors(y).split(",")]
-  if output not in x: 
-    # output = random.choice(x)
-    output = persona.scratch.living_area.split(":")[1]
+  # if output not in x: 
+  #   # output = random.choice(x)
+  #   output = persona.scratch.living_area.split(":")[1]
+  output = "Hospital"
 
   print ("DEBUG", random.choice(x), "------", output)
 
@@ -749,13 +758,18 @@ def run_gpt_prompt_action_arena(action_description,
   prompt = generate_prompt(prompt_input, prompt_template)
 
   fail_safe = get_fail_safe()
-  output = safe_generate_response(prompt, gpt_param, 5, fail_safe,
-                                   __func_validate, __func_clean_up)
-  print (output)
+  # output = safe_generate_response(prompt, gpt_param, 5, fail_safe,
+  #                                  __func_validate, __func_clean_up)
+  # logger.info (output)
+  # # output = "{Dentistry Consultation Room"
+  # logger.info("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
   # y = f"{act_world}:{act_sector}"
   # x = [i.strip() for i in persona.s_mem.get_str_accessible_sector_arenas(y).split(",")]
   # if output not in x: 
   #   output = random.choice(x)
+  output = "Dentistry Consultation Room"
+  # output = "Triage Station"
+  # print(output)
 
   if debug or verbose: 
     print_run_prompts(prompt_template, persona, gpt_param, 
@@ -924,10 +938,29 @@ def run_gpt_prompt_event_triple(action_description, persona, verbose=False):
                     persona.name]
     return prompt_input
   
+  # def __func_clean_up(gpt_response, prompt=""):
+  #   cr = gpt_response.strip()
+  #   cr = [i.strip() for i in cr.split(")")[0].split(",")]
+  #   return cr
+  
   def __func_clean_up(gpt_response, prompt=""):
-    cr = gpt_response.strip()
-    cr = [i.strip() for i in cr.split(")")[0].split(",")]
-    return cr
+    """
+    Extracts a clean (verb, object) pair from GPT response assuming subject is persona.name.
+    """
+    # Look for the first (subject, verb, object) tuple in the response
+    match = re.search(r"\(\s*([^,]+?)\s*,\s*([^,]+?)\s*,\s*([^)]+?)\s*\)", gpt_response)
+    
+    if not match:
+        raise ValueError("No valid (subject, verb, object) tuple found in GPT response.")
+
+    subject, verb, obj = match.groups()
+
+    # Clean each component
+    subject = subject.strip().strip("'\"")
+    verb = verb.strip().strip("'\"")
+    obj = obj.strip().strip("'\".")
+
+    return [verb, obj]
 
   def __func_validate(gpt_response, prompt=""): 
     try: 
@@ -1018,6 +1051,25 @@ def run_gpt_prompt_act_obj_desc(act_game_object, act_desp, persona, verbose=Fals
     if cr[-1] == ".": cr = cr[:-1]
     return cr
 
+  # def __func_clean_up(gpt_response, prompt=""):
+  #   """
+  #   Extracts the correct (subject, verb, object) triple from a verbose GPT response.
+  #   """
+  #   # Try to find the line that contains the actual tuple
+  #   match = re.search(r"\(\s*([^,]+?)\s*,\s*([^,]+?)\s*,\s*([^)]+?)\s*\)", gpt_response)
+    
+  #   if not match:
+  #       raise ValueError("No valid (subject, verb, object) tuple found in GPT response.")
+
+  #   subject, verb, obj = match.groups()
+
+  #   # Clean extra quotes or whitespace
+  #   subject = subject.strip().strip("\"'")
+  #   verb = verb.strip().strip("\"'")
+  #   obj = obj.strip().strip("\"'.")
+
+  #   return (subject, verb, obj)
+
   def __func_validate(gpt_response, prompt=""): 
     try: 
       gpt_response = __func_clean_up(gpt_response, prompt="")
@@ -1034,6 +1086,25 @@ def run_gpt_prompt_act_obj_desc(act_game_object, act_desp, persona, verbose=Fals
     cr = gpt_response.strip()
     if cr[-1] == ".": cr = cr[:-1]
     return cr
+  
+  # def __chat_func_clean_up(gpt_response, prompt=""):
+  #   """
+  #   Extracts the correct (subject, verb, object) triple from a verbose GPT response.
+  #   """
+  #   # Try to find the line that contains the actual tuple
+  #   match = re.search(r"\(\s*([^,]+?)\s*,\s*([^,]+?)\s*,\s*([^)]+?)\s*\)", gpt_response)
+    
+  #   if not match:
+  #       raise ValueError("No valid (subject, verb, object) tuple found in GPT response.")
+
+  #   subject, verb, obj = match.groups()
+
+  #   # Clean extra quotes or whitespace
+  #   subject = subject.strip().strip("\"'")
+  #   verb = verb.strip().strip("\"'")
+  #   obj = obj.strip().strip("\"'.")
+
+  #   return (subject, verb, obj)
 
   def __chat_func_validate(gpt_response, prompt=""): ############
     try: 
@@ -1050,10 +1121,13 @@ def run_gpt_prompt_act_obj_desc(act_game_object, act_desp, persona, verbose=Fals
   prompt_input = create_prompt_input(act_game_object, act_desp, persona)  ########
   prompt = generate_prompt(prompt_input, prompt_template)
   example_output = "being fixed" ########
-  special_instruction = "The output should ONLY contain the phrase that should go in <fill in>." ########
+  special_instruction = "The output should ONLY contain the phrase that should go in <fill in>. Only generate the output, nothing else." ########
   fail_safe = get_fail_safe(act_game_object) ########
-  output = ChatGPT_safe_generate_response(prompt, example_output, special_instruction, 3, fail_safe,
-                                          __chat_func_validate, __chat_func_clean_up, True)
+  # output = ChatGPT_safe_generate_response(prompt, example_output, special_instruction, 3, fail_safe,
+  #                                         __chat_func_validate, __chat_func_clean_up, True)
+  output = "is idle"
+  # print("~~~~#### OUTPUT ####~~~~")
+  # print(output)
   if output != False: 
     return output, [output, prompt, gpt_param, prompt_input, fail_safe]
   # ChatGPT Plugin ===========================================================
@@ -1904,7 +1978,7 @@ def run_gpt_prompt_event_poignancy(persona, event_description, test_input=None, 
       return False 
 
   def get_fail_safe(): 
-    return 4
+    return 10
 
 
 
@@ -1930,8 +2004,9 @@ def run_gpt_prompt_event_poignancy(persona, event_description, test_input=None, 
   example_output = "5" ########
   special_instruction = "The output should ONLY contain ONE integer value on the scale of 1 to 10." ########
   fail_safe = get_fail_safe() ########
-  output = ChatGPT_safe_generate_response(prompt, example_output, special_instruction, 3, fail_safe,
-                                          __chat_func_validate, __chat_func_clean_up, True)
+  # output = ChatGPT_safe_generate_response(prompt, example_output, special_instruction, 3, fail_safe,
+  #                                         __chat_func_validate, __chat_func_clean_up, True)
+  output = fail_safe
   if output != False: 
     return output, [output, prompt, gpt_param, prompt_input, fail_safe]
   # ChatGPT Plugin ===========================================================

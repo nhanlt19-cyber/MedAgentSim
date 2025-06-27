@@ -718,6 +718,11 @@ if __name__ == '__main__':
   target = parser.parse_args().target
   input_command = parser.parse_args().command
   
+  import logging
+  logger = logging.getLogger(__name__)
+  logger.setLevel(logging.INFO)
+  logger.info("reverie")
+
   rs = ReverieServer(origin, target)
   rs.open_server(input_command)
 
