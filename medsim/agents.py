@@ -403,10 +403,10 @@ class DoctorAgent:
         generate_question_json(question, answer_choices, correct_answer)
 
         generate_single = import_generate() # mmlu
-        generate_single(self.backend, scenario_id, 'temp_question.json')
+        generate_single(fallback_agent, scenario_id, 'temp_question.json')
 
         # generate prediction from mmlu
-        diagnosis_pred = get_diagnosis(self.backend, scenario_id)
+        diagnosis_pred = get_diagnosis(fallback_agent, scenario_id)
 
         # Final consensus based on discussion
         consensus_prompt = (f"The following discussion occurred among doctors:\n\n" + "\n".join(responses) + f"\n\nAnd you have come to the conclusion that the correct diagnosis is: {diagnosis_pred}" + "\n\nBased on this discussion and findings, provide a Final Diagnosis.")
