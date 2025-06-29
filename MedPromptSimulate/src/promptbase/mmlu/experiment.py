@@ -650,7 +650,7 @@ def reflect_phase(options, problem, output, backend=None):
 
     if response["success"]:
         add = response["text"]
-        solve(options, problem, add, switch)
+        solve(options, problem, add, switch, backend)
 
 
 
