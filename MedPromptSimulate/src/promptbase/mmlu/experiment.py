@@ -601,7 +601,7 @@ def solve(options, problem, add=None, switch=0, backend=None):
             
         else:
             #reflection phase
-            reflect_phase(options, problem, output, model) 
+            reflect_phase(options, problem, output, backend) 
     #####################MEDICAL RECORD LIBRARY#####################  
     elif switch ==1:
         if problem['correct_answer']==output['answer']: #is there another way to check?
@@ -617,7 +617,7 @@ def solve(options, problem, add=None, switch=0, backend=None):
         switch=0
     ################################################################################################################
 
-def reflect_phase(options, problem, output, model):
+def reflect_phase(options, problem, output, backend=None):
     switch = 1
 
     correct_reasoning = {
@@ -636,13 +636,17 @@ def reflect_phase(options, problem, output, model):
     Reasoning: <discuss why the generated answer is wrong> 
     Insights: <what principle should be looked at carefully to improve the performance in the future>"""
 
-    response = text_completion(
-        model=model,
-        prompt=message,
-        temperature=0.05,
-        max_tokens=500,
-        log_file=options["log_file"],
-    )
+    # response = text_completion(
+    #     model=model,
+    #     prompt=message,
+    #     temperature=0.05,
+    #     max_tokens=500,
+    #     log_file=options["log_file"],
+    # )
+    if (not backend is None):
+        sys_prompt = "Please note the exam question has an unique answer based on the information given. Include Answer: [X] at the end where X must be A, B, C, or D."
+        response = {"response": None, "text": backend.query_model(message, sys_prompt), "success": True}
+        print(f"REFLECTION: {response}")
 
     if response["success"]:
         add = response["text"]
