@@ -506,7 +506,7 @@ def get_diagnosis(backend, scenario_id):
     return dia
 
 def extract_bracket_content(s: str):
-    if "[" in s and "]" in s:
+    if "[" in s or "]" in s:
         return "[" + s.split("[", 1)[-1].split("]")[0] + "]"
     return s  # Return original string if brackets are not found
 
@@ -522,7 +522,10 @@ def clean_diagnosis(message):
     formatted_str = message.strip()
     formatted_str = formatted_str.replace('[', '["')
     formatted_str = formatted_str.replace(']', '"]')
-    formatted_str = formatted_str.replace(',', '", "')
+    if "., " in formatted_str or ".,\"" in formatted_str:
+        formatted_str = formatted_str.replace(".,", '.", "')
+    else:
+        formatted_str = formatted_str.replace(",", '", "')
     
     diagnosis_list = eval(formatted_str)
     diagnosis_list = [dia.strip() for dia in diagnosis_list]
