@@ -166,7 +166,7 @@ def query_model(model_str, prompt, system_prompt, tries=50, timeout=30.0, image_
             # from openai import OpenAI
                 client = OpenAI(
                 base_url = "https://integrate.api.nvidia.com/v1",
-                api_key = "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"
+                api_key = "YOUR_API_KEY_HERE"
                 )
                 response = client.chat.completions.create(
                 model="meta/llama-3.1-405b-instruct",
@@ -629,7 +629,7 @@ import datetime
 def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor_llm, patient_llm,
          measurement_llm, moderator_llm, num_scenarios, dataset, img_request, total_inferences,
          anthropic_api_key=None):
-    openai.api_key = "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"
+    openai.api_key = "YOUR_OPENAI_API_KEY_HERE"
     anthropic_llms = ["claude3.5sonnet"]
     replicate_llms = ["llama-3-70b-instruct", "llama-2-70b-chat", "mixtral-8x7b"]
     if patient_llm in replicate_llms or doctor_llm in replicate_llms:
