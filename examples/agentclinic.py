@@ -1064,4 +1064,4 @@ if __name__ == "__main__":
     )
     
 #python3 agentclinic.py --inf_type "llm" --inf_type "llm" --patient_llm "HF_mistralai/Mixtral-8x7B-v0.1"  --moderator_llm "HF_mistralai/Mixtral-8x7B-v0.1"  --doctor_llm "HF_mistralai/Mixtral-8x7B-v0.1"  --measurement_llm "HF_mistralai/Mixtral-8x7B-v0.1"
-#python3 agentclinic.py --inf_type "llm" --inf_type "llm" --patient_llm "gpt-4o-mini"  --moderator_llm "gpt-4o-mini"  --doctor_llm "gpt-4o-mini"  --measurement_llm "gpt-4o-mini" --openai_api_key "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" --output_dir "/home/komal.kumar/documment/MultiAgent/AgentClinic/Results/chatgpt/"
+#python3 agentclinic.py --inf_type "llm" --inf_type "llm" --patient_llm "gpt-4o-mini"  --moderator_llm "gpt-4o-mini"  --doctor_llm "gpt-4o-mini"  --measurement_llm "gpt-4o-mini" --openai_api_key "Your API keys" --output_dir "/home/komal.kumar/documment/MultiAgent/AgentClinic/Results/chatgpt/"

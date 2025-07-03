@@ -790,7 +790,7 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
 
 if __name__ == "__main__":
     import os
-    os.environ['GROQ_API_KEY']='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'
+    os.environ['GROQ_API_KEY']='YOUR_GROQ_API'
     parser = argparse.ArgumentParser(description='Medical Diagnosis Simulation CLI')
     parser.add_argument('--openai_api_key', type=str, required=False, help='OpenAI API Key')
     parser.add_argument('--replicate_api_key', type=str, required=False, help='Replicate API Key')

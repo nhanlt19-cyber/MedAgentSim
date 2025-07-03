@@ -166,7 +166,7 @@ def query_model(model_str, prompt, system_prompt, tries=50, timeout=30.0, image_
             # from openai import OpenAI
                 client = OpenAI(
                 base_url = "https://integrate.api.nvidia.com/v1",
-                api_key = "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"
+                api_key = "Your Api Key Here"
                 )
                 response = client.chat.completions.create(
                 model="meta/llama-3.1-405b-instruct",
@@ -629,7 +629,7 @@ import datetime
 def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor_llm, patient_llm,
          measurement_llm, moderator_llm, num_scenarios, dataset, img_request, total_inferences,
          anthropic_api_key=None):
-    openai.api_key = "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"
+    openai.api_key = "Your OpenAI API Key Here"
     anthropic_llms = ["claude3.5sonnet"]
     replicate_llms = ["llama-3-70b-instruct", "llama-2-70b-chat", "mixtral-8x7b"]
     if patient_llm in replicate_llms or doctor_llm in replicate_llms:
@@ -790,7 +790,7 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
 
 if __name__ == "__main__":
     import os
-    os.environ['GROQ_API_KEY']='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'
+    os.environ['GROQ_API_KEY']='Your Groq API Key Here'
     parser = argparse.ArgumentParser(description='Medical Diagnosis Simulation CLI')
     parser.add_argument('--openai_api_key', type=str, required=False, help='OpenAI API Key')
     parser.add_argument('--replicate_api_key', type=str, required=False, help='Replicate API Key')
