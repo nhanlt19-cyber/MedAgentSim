@@ -9,7 +9,19 @@ function to obtain responses from various LLM backends.
 import time
 import re
 import random
-from query_model import query_model, BAgent, extract_question, generate_possible_diagnoses, generate_answer_choices, generate_question_json, import_generate, get_diagnosis
+from query_model import (
+    query_model,
+    BAgent,
+    extract_question,
+    generate_possible_diagnoses,
+    generate_possible_diagnoses_from_discussion,
+    generate_answer_choices,
+    generate_answer_choices_from_candidates,
+    generate_question_json,
+    generate_question_json_no_answer,
+    import_generate,
+    get_diagnosis,
+)
 # from query import BAgent
 import logging
 logger = logging.getLogger(__name__)
@@ -390,27 +402,37 @@ class DoctorAgent:
         responses = []
 
         for i in range(1, self.num_doctors + 1):
-            # breakpoint()
             prompt = (f"{discussion_prompt} Doctor {i}, please share your opinion on the diagnosis and reasoning.\n")
-            response =  query_model(self.backend, prompt, self.col_system_prompt(), image_requested=image_requested, scene=self.scenario)
+            response = query_model(self.backend, prompt, self.col_system_prompt(), image_requested=image_requested, scene=self.scenario)
             responses.append(f"Doctor {i}: {response.strip()}")
 
+        # Extract question from the discussion
         question = extract_question(patient_statement, self.agent_hist, "\n".join(responses), self.backend)
-        answer = self.scenario.diagnosis_information()
-        print(f"CORRECT DIAGNOSIS: {answer}")
-        answer_list = generate_possible_diagnoses(question, answer, self.backend)
-        answer_choices, correct_answer = generate_answer_choices(answer, answer_list)
-        generate_question_json(question, answer_choices, correct_answer)
 
-        generate_single = import_generate() # mmlu
+        # Generate candidate diagnoses from doctor discussion WITHOUT using ground truth
+        # This avoids data leakage - we extract candidates purely from what doctors discussed
+        doctor_discussion = "\n".join(responses)
+        candidate_diagnoses = generate_possible_diagnoses_from_discussion(question, doctor_discussion, self.backend)
+
+        # Generate answer choices from candidates (no ground truth needed)
+        answer_choices = generate_answer_choices_from_candidates(candidate_diagnoses)
+
+        # Generate question JSON without the correct answer (unknown during inference)
+        generate_question_json_no_answer(question, answer_choices)
+
+        generate_single = import_generate()  # mmlu
         generate_single(fallback_agent, scenario_id, 'temp_question.json')
 
-        # generate prediction from mmlu
+        # Generate prediction from mmlu
         diagnosis_pred = get_diagnosis(fallback_agent, scenario_id)
 
-        # Final consensus based on discussion
-        consensus_prompt = (f"The following discussion occurred among doctors:\n\n" + "\n".join(responses) + f"\n\nAnd you have come to the conclusion that the correct diagnosis is: {diagnosis_pred}" + "\n\nBased on this discussion and findings, provide a Final Diagnosis.")
-        # breakpoint()
+        # Final consensus based on discussion and model prediction
+        consensus_prompt = (
+            f"The following discussion occurred among doctors:\n\n"
+            + "\n".join(responses)
+            + f"\n\nBased on the analysis, the most likely diagnosis is: {diagnosis_pred}"
+            + "\n\nBased on this discussion and findings, provide a Final Diagnosis."
+        )
         final_response = query_model(self.backend, consensus_prompt, self.col_system_prompt(), image_requested=None, scene=self.scenario)
         self.agent_hist += "\n".join(responses) + f"\nFinal Diagnosis: {final_response.strip()}\n"
 

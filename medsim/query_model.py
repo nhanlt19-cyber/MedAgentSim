@@ -33,26 +33,58 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 class BAgent:
-    def __init__(self, model_name="meta-llama/Llama-3.3-70B-Instruct", server_url="http://10.127.30.115:8012/v1/chat/completions"):
+    def __init__(
+        self,
+        model_name="meta-llama/Llama-3.3-70B-Instruct",
+        server_url="http://localhost:8012/v1/chat/completions",
+        ollama_url="http://localhost:11434",
+        ollama_model="llama3.1"
+    ):
         """
         Initializes the BAgent:
         - Uses vLLM server if available.
+        - Otherwise, uses Ollama if available.
         - Otherwise, loads the model locally.
+
+        Args:
+            model_name: Model name for vLLM/transformers
+            server_url: vLLM server URL
+            ollama_url: Ollama server URL (default: http://localhost:11434)
+            ollama_model: Ollama model name (default: llama3.1)
         """
         self.server_url = server_url
         self.model_name = model_name
-        self.use_server = self._check_server()
-        print(f"Using vLLM server: {self.use_server}")
+        self.ollama_url = ollama_url
+        self.ollama_model = ollama_model
 
-        if not self.use_server:
-            self._load_model()
-        else:
+        # Check available backends in order of preference
+        self.use_server = self._check_vllm_server()
+        self.use_ollama = False
+
+        if self.use_server:
+            print(f"Using vLLM server: {self.server_url}")
             logger.info(f"Using vLLM server at {self.server_url}, skipping local model loading.")
+        else:
+            self.use_ollama = self._check_ollama_server()
+            if self.use_ollama:
+                print(f"Using Ollama server: {self.ollama_url} with model {self.ollama_model}")
+                logger.info(f"Using Ollama at {self.ollama_url} with model {self.ollama_model}")
+            else:
+                print("No server available, loading model locally...")
+                self._load_model()
 
-    def _check_server(self):
+    def _check_vllm_server(self):
         """Checks if the vLLM server is running."""
         try:
             response = requests.get(self.server_url.replace("/v1/chat/completions", "/health"), timeout=2)
+            return response.status_code == 200
+        except requests.RequestException:
+            return False
+
+    def _check_ollama_server(self):
+        """Checks if the Ollama server is running."""
+        try:
+            response = requests.get(f"{self.ollama_url}/api/tags", timeout=2)
             return response.status_code == 200
         except requests.RequestException:
             return False
@@ -87,17 +119,52 @@ class BAgent:
                 logger.error(f"Unexpected error during model loading: {e}")
                 raise
 
-    # def query_model(self, prompt, system_prompt="You are a helpful assistant.", tries=5, timeout=5.0, image_requested=False, scene=None, max_prompt_len=2500, clip_prompt=False, thread_id=1):
-    #     """Queries the vLLM server if available, otherwise uses local model."""
-    #     if self.use_server:
-    #         return self._query_server(prompt, system_prompt, tries, timeout)
-    #     return self._query_local(prompt, system_prompt, image_requested, scene, max_prompt_len, clip_prompt, tries, timeout)
-    
     def query_model(self, prompt, system_prompt="You are a helpful assistant.", tries=5, timeout=120, image_requested=False, scene=None, max_prompt_len=2500, clip_prompt=False, thread_id=1):
-        """Queries the vLLM server if available, otherwise uses local model."""
+        """Queries available backend: vLLM server > Ollama > local model."""
         if self.use_server:
             return self._query_server(prompt, system_prompt, tries, timeout)
+        elif self.use_ollama:
+            return self._query_ollama(prompt, system_prompt, tries, timeout)
         return self._query_local(prompt, system_prompt, image_requested, scene, max_prompt_len, clip_prompt, tries, timeout)
+
+    def _query_ollama(self, user_prompt, system_prompt, tries=5, timeout=120.0) -> str:
+        """
+        Queries the Ollama server with system and user prompts.
+        Returns the generated text.
+        """
+        # Ollama supports OpenAI-compatible API at /v1/chat/completions
+        # or native API at /api/chat
+        ollama_chat_url = f"{self.ollama_url}/api/chat"
+
+        payload = {
+            "model": self.ollama_model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            "stream": False,
+            "options": {
+                "num_predict": 200,
+                "temperature": 0.7
+            }
+        }
+
+        headers = {"Content-Type": "application/json"}
+
+        for attempt in range(tries):
+            try:
+                response = requests.post(ollama_chat_url, headers=headers, json=payload, timeout=timeout)
+                response.raise_for_status()
+                response_data = response.json()
+
+                # Ollama native API returns response in 'message.content'
+                return response_data["message"]["content"].strip()
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"Ollama query attempt {attempt + 1} failed: {e}")
+                time.sleep(min(timeout, 5.0))
+
+        logger.error("Max retries exceeded: Unable to fetch response from Ollama.")
+        return "Error: Failed to fetch response from Ollama."
 
     def _query_server(self, user_prompt, system_prompt, tries=10, timeout=20.0) -> str:
         """
@@ -436,8 +503,33 @@ def query_model(model_str: str,
                 answer = chat_completion.choices[0].message.content
                 answer = re.sub(r"\s+", " ", answer)
 
+            elif model_str.startswith("ollama:"):
+                # For Ollama models, use the format "ollama:model_name"
+                # e.g., "ollama:llama3.1", "ollama:mistral", "ollama:codellama"
+                ollama_model = model_str.replace("ollama:", "")
+                ollama_url = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+                ollama_chat_url = f"{ollama_url}/api/chat"
+
+                payload = {
+                    "model": ollama_model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "stream": False,
+                    "options": {
+                        "num_predict": 200,
+                        "temperature": 0.7
+                    }
+                }
+                headers = {"Content-Type": "application/json"}
+                response = requests.post(ollama_chat_url, headers=headers, json=payload, timeout=timeout)
+                response.raise_for_status()
+                response_data = response.json()
+                answer = response_data["message"]["content"].strip()
+                answer = re.sub(r"\s+", " ", answer)
+
             else:
-                # logger.info("################ AAAAAAAAAAAAAAAAAAAA ##################")
                 # Fallback to the baseline agent if none of the above match.
                 answer = fallback_agent.query_model(prompt, system_prompt)
 
@@ -537,7 +629,7 @@ def generate_possible_diagnoses(question: str, answer: str, backend: str):
     - The generated diagnoses match the format of the correct diagnosis.
     - The correct diagnosis is excluded.
     - The diagnoses are unique.
-    
+
     Parameters:
         question (str): The medical question.
         answer (str): The correct diagnosis.
@@ -551,15 +643,84 @@ def generate_possible_diagnoses(question: str, answer: str, backend: str):
         f"Question: {question}\n"
         f"Correct Diagnosis: {answer}\n\n"
         f"Provide the diagnoses in a Python list format."
-    )   
+    )
 
     system_prompt = "You are a highly knowledgeable and precise AI assistant specializing in medical reasoning. Your role is to analyze clinical scenarios and provide accurate, evidence-based differential diagnoses. You will assess the details of each case carefully and generate insightful responses that adhere to medical best practices."
     response = query_model(backend, prompt, system_prompt)
-    
+
     # Extract the response as a list
     diagnoses = clean_diagnosis(response)  # Assuming response is in list format
-    
+
     return diagnoses
+
+
+def generate_possible_diagnoses_from_discussion(question: str, doctor_discussion: str, backend: str):
+    """
+    Generates a Python list of 4 possible diagnoses based on the doctor discussion.
+    This version does NOT use the ground truth answer - it extracts candidates purely
+    from the doctors' opinions to avoid data leakage.
+
+    Parameters:
+        question (str): The medical question.
+        doctor_discussion (str): The concatenated doctor discussion responses.
+        backend (str): The LLM backend to use.
+
+    Returns:
+        list: A list of 4 possible diagnoses extracted from the discussion.
+    """
+    prompt = (
+        f"Based on the following medical question and doctor discussion, extract the top 4 most likely diagnoses "
+        f"that the doctors are considering. These should be the actual diagnoses mentioned or strongly implied "
+        f"in the discussion. Ensure the diagnoses are unique and medically plausible.\n\n"
+        f"Question: {question}\n\n"
+        f"Doctor Discussion:\n{doctor_discussion}\n\n"
+        f"Provide exactly 4 diagnoses in a Python list format, e.g., [\"Diagnosis 1\", \"Diagnosis 2\", \"Diagnosis 3\", \"Diagnosis 4\"].\n"
+        f"Extract these from what the doctors are actually discussing - do not invent new diagnoses."
+    )
+
+    system_prompt = (
+        "You are a highly knowledgeable and precise AI assistant specializing in medical reasoning. "
+        "Your role is to extract and summarize the differential diagnoses being discussed by medical professionals. "
+        "Focus on identifying the specific diagnoses mentioned in the discussion."
+    )
+    response = query_model(backend, prompt, system_prompt)
+
+    # Extract the response as a list
+    diagnoses = clean_diagnosis(response)
+
+    # Ensure we have exactly 4 diagnoses
+    if len(diagnoses) < 4:
+        # If less than 4, pad with placeholder
+        while len(diagnoses) < 4:
+            diagnoses.append(f"Undetermined diagnosis {len(diagnoses) + 1}")
+    elif len(diagnoses) > 4:
+        diagnoses = diagnoses[:4]
+
+    return diagnoses
+
+
+def generate_answer_choices_from_candidates(candidate_diagnoses: list):
+    """
+    Creates answer choices from candidate diagnoses without knowing the correct answer.
+    This is used to avoid data leakage during inference.
+
+    Parameters:
+        candidate_diagnoses (list): List of candidate diagnoses from doctor discussion.
+
+    Returns:
+        dict: Mapping of letter choices (A, B, C, D) to diagnoses.
+    """
+    letter_answers = ['A', 'B', 'C', 'D']
+
+    # Ensure we have exactly 4 candidates
+    candidates = candidate_diagnoses[:4] if len(candidate_diagnoses) >= 4 else candidate_diagnoses
+    while len(candidates) < 4:
+        candidates.append(f"Other diagnosis {len(candidates) + 1}")
+
+    random.shuffle(candidates)
+    result = dict(zip(letter_answers, candidates))
+
+    return result
 
 def generate_answer_choices(correct_answer, answer_list):
     letter_answers = ['A', 'B', 'C', 'D']
@@ -572,7 +733,7 @@ def generate_answer_choices(correct_answer, answer_list):
 def generate_question_json(question: str, answer_choices: dict, correct_answer: str, filename: str = "temp_question.json"):
     """
     Generates and saves a JSON file with a question, answer choices, and the correct answer.
-    
+
     Parameters:
         question (str): The question text.
         answer_choices (dict): Dictionary of answer choices, e.g., {"A": "Answer1", "B": "Answer2"}.
@@ -599,7 +760,43 @@ def generate_question_json(question: str, answer_choices: dict, correct_answer: 
 
     # Construct the full file path
     save_path = os.path.join(save_folder, filename)
-    
+
+    # Save to JSON file
+    with open(save_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4, ensure_ascii=False)
+
+
+def generate_question_json_no_answer(question: str, answer_choices: dict, filename: str = "temp_question.json"):
+    """
+    Generates and saves a JSON file with a question and answer choices WITHOUT the correct answer.
+    This is used during inference to avoid data leakage - the correct answer is not known.
+
+    Parameters:
+        question (str): The question text.
+        answer_choices (dict): Dictionary of answer choices, e.g., {"A": "Answer1", "B": "Answer2"}.
+        filename (str): The filename to save the JSON data. Default is "temp_question.json".
+    """
+    data = [
+        {
+            "id": 1,
+            "question": question,
+            "answer_choices": answer_choices,
+            "correct_answer": None  # Unknown during inference
+        }
+    ]
+
+    # Get the absolute path of the current script
+    current_file = os.path.abspath(__file__)
+
+    # Find the root directory dynamically
+    root_dir = os.path.dirname(os.path.dirname(current_file))
+
+    # Construct the destination folder path
+    save_folder = os.path.join(root_dir, "MedPromptSimulate", "src", "promptbase", "datasets", "mmlu", "train")
+
+    # Construct the full file path
+    save_path = os.path.join(save_folder, filename)
+
     # Save to JSON file
     with open(save_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
