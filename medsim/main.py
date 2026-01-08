@@ -3,7 +3,7 @@ import os
 import json
 import time
 import openai
-from medsim.core.agent import MeasurementAgent, PatientAgent, DoctorAgent
+from medsim.core.agent import MeasurementAgent, PatientAgent, DoctorAgent, compare_results
 from medsim.core.scenario import *
 from medsim.query_model import *
 def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor_llm, patient_llm,
@@ -16,7 +16,7 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
         os.environ["REPLICATE_API_TOKEN"] = replicate_api_key
     if doctor_llm in anthropic_llms:
         os.environ["ANTHROPIC_API_KEY"] = anthropic_api_key
-    output_dir = "./"
+    output_dir = "/media/mbzuaiser/SSD1/Komal/Documents/multiagent/MedAgentSim/output"
     os.makedirs(output_dir, exist_ok=True)
     # Load the appropriate scenario loader
     if dataset == "MedQA":
@@ -80,7 +80,7 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
             if inf_type == "human_doctor":
                 doctor_dialogue = input("\nQuestion for patient: ")
             else:
-                doctor_dialogue = doctor_agent.inference_doctor(pi_dialogue, image_requested=imgs, scenario_id=_scenario_id)
+                doctor_dialogue = doctor_agent.inference_doctor(pi_dialogue, image_requested=imgs)
 
             # Log and print the doctor's dialogue
             dialogue_text = f"Doctor [{int(((_inf_id+1)/total_inferences)*100)}%]: {doctor_dialogue}"
@@ -90,7 +90,7 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
 
             # Check for diagnosis
             if "DIAGNOSIS READY" in doctor_dialogue or _inf_id == total_inferences:
-                correctness = compare_results(doctor_dialogue, scenario.diagnosis_information(), mpipe) == "yes"
+                correctness = compare_results(doctor_dialogue, scenario.diagnosis_information(), mpipe)
                 if correctness:
                     total_correct += 1
                 result_text = f"\nCorrect answer: {scenario.diagnosis_information()}"

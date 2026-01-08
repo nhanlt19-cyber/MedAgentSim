@@ -600,7 +600,7 @@ def solve(options, problem, add=None, switch=0, backend=None):
             record = record + 1
             
         else:
-            #reflection phase
+            # #reflection phase
             reflect_phase(options, problem, output, backend) 
     #####################MEDICAL RECORD LIBRARY#####################  
     elif switch ==1:

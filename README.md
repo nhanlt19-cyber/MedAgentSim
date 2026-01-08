@@ -136,6 +136,15 @@ python medsim/main.py \
     --moderator_llm meta-llama/Llama-3.1-70B-Instruct \
     --agent_dataset MedQA
 ```
+We also support ollama, 
+```bash
+python medsim/main.py \
+    --doctor_llm llama3.3:70b \
+    --patient_llm llama3.3:70b \
+    --measurement_llm llama3.3:70b \
+    --moderator_llm llama3.3:70b \
+    --agent_dataset MedQA
+```
 ## 🧩 Project Structure
 
 ```

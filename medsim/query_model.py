@@ -38,7 +38,7 @@ class BAgent:
         model_name="meta-llama/Llama-3.3-70B-Instruct",
         server_url="http://localhost:8012/v1/chat/completions",
         ollama_url="http://localhost:11434",
-        ollama_model="llama3.1"
+        ollama_model="llama3.3:70b"
     ):
         """
         Initializes the BAgent:

@@ -409,8 +409,7 @@ class DoctorAgent:
         # Extract question from the discussion
         question = extract_question(patient_statement, self.agent_hist, "\n".join(responses), self.backend)
 
-        # Generate candidate diagnoses from doctor discussion WITHOUT using ground truth
-        # This avoids data leakage - we extract candidates purely from what doctors discussed
+        # Generate candidate diagnoses from doctor discussion
         doctor_discussion = "\n".join(responses)
         candidate_diagnoses = generate_possible_diagnoses_from_discussion(question, doctor_discussion, self.backend)
 

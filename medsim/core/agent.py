@@ -558,8 +558,7 @@ class DoctorAgent:
         # Extract question from the discussion
         question = extract_question(patient_statement, self.agent_hist, "\n".join(responses), self.backend)
 
-        # Generate candidate diagnoses from doctor discussion WITHOUT using ground truth
-        # This avoids data leakage - we extract candidates purely from what doctors discussed
+        # Generate candidate diagnoses from doctor discussion
         doctor_discussion = "\n".join(responses)
         candidate_diagnoses = generate_possible_diagnoses_from_discussion(question, doctor_discussion, self.backend)
 
@@ -570,10 +569,10 @@ class DoctorAgent:
         generate_question_json_no_answer(question, answer_choices)
 
         generate_single = import_generate()  # mmlu
-        generate_single('temp_question.json')
+        generate_single(save_path = 'temp_question.json', scenario_id=1, backend=self.pipe)
 
         # Generate prediction from mmlu
-        diagnosis_pred = get_diagnosis()
+        diagnosis_pred = get_diagnosis(scenario_id=1, backend=self.pipe)
 
         # Final consensus based on discussion and model prediction
         consensus_prompt = (

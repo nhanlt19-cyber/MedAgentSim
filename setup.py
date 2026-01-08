@@ -13,9 +13,7 @@ setup(
         "openai",
         "python-liquid",
         "GitPython",
-        "torch",
         "scikit-learn",
-        "vLLM",
     ],
     python_requires=">=3.9",  # Specify the minimum Python version required
 )
