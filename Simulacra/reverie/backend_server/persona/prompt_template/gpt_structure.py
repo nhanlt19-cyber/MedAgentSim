@@ -114,7 +114,21 @@ def import_bagent():
 # )
 
 BAgent = import_bagent()
-backend = BAgent()
+
+# Get LLM server configuration from environment variables
+# This allows using custom LLM server from command line arguments
+llm_server_url = os.environ.get("LLM_SERVER_URL")
+llm_api_key = os.environ.get("LLM_API_KEY")
+
+# Initialize BAgent with custom server if provided
+if llm_server_url:
+    backend = BAgent(
+        server_url=llm_server_url,
+        api_key=llm_api_key
+    )
+else:
+    # Default: use local server or Ollama
+    backend = BAgent()
 
 import logging
 logger = logging.getLogger(__name__)

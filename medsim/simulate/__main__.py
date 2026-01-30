@@ -6,6 +6,7 @@ import time
 import logging
 import json
 import yaml
+import argparse
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Type
@@ -135,6 +136,16 @@ def run_backend_server(target: str, stop_event: threading.Event):
         command = f'python "{backend_script_file}" --origin "test-simulation" --target "{target}" --command "toq"'
         logger.info(f"Executing command: {command}")
         
+        # Prepare environment variables for subprocess
+        env = os.environ.copy()
+        # Pass LLM server config from parent process if available
+        llm_server_url = os.environ.get("LLM_SERVER_URL")
+        llm_api_key = os.environ.get("LLM_API_KEY")
+        if llm_server_url:
+            env["LLM_SERVER_URL"] = llm_server_url
+        if llm_api_key:
+            env["LLM_API_KEY"] = llm_api_key
+        
         # Run command with output logging
         with open(log_file, "w") as log:
             process = subprocess.Popen(
@@ -142,7 +153,8 @@ def run_backend_server(target: str, stop_event: threading.Event):
                 shell=True, 
                 stdout=subprocess.PIPE, 
                 stderr=subprocess.STDOUT, 
-                text=True
+                text=True,
+                env=env
             )
             
             for line in process.stdout:
@@ -243,6 +255,26 @@ def run_scenarios(num_scenarios: int, delay: int = 5):
 def main():
     """Main function to run the simulation."""
     try:
+        # Parse command line arguments
+        parser = argparse.ArgumentParser(description='Run MedAgentSim simulation')
+        parser.add_argument('--llm_server_url', type=str, default=None, help='Custom LLM server URL')
+        parser.add_argument('--llm_api_key', type=str, default=None, help='API key for custom LLM server')
+        parser.add_argument('--ollama_url', type=str, default=None, help='Ollama server URL')
+        parser.add_argument('--ollama_model', type=str, default=None, help='Ollama model name')
+        args = parser.parse_args()
+        
+        # Set environment variables for subprocess
+        if args.llm_server_url:
+            os.environ["LLM_SERVER_URL"] = args.llm_server_url
+            logger.info(f"Set LLM_SERVER_URL: {args.llm_server_url}")
+        if args.llm_api_key:
+            os.environ["LLM_API_KEY"] = args.llm_api_key
+            logger.info("Set LLM_API_KEY")
+        if args.ollama_url:
+            os.environ["OLLAMA_URL"] = args.ollama_url
+        if args.ollama_model:
+            os.environ["OLLAMA_MODEL"] = args.ollama_model
+        
         # Load configuration
         logger.info(f"Loading configuration from {CONFIG_PATH}")
         config = load_config(CONFIG_PATH)

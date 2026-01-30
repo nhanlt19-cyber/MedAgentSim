@@ -68,27 +68,47 @@ class BAgent:
         self.ollama_url = ollama_url
         self.ollama_model = ollama_model
         self.api_key = api_key or os.environ.get("LLM_API_KEY")
+        
+        # Check if custom server URL is provided (not default localhost)
+        self.has_custom_server = server_url and server_url != "http://localhost:8012/v1/chat/completions"
 
         # Check available backends in order of preference
-        self.use_server = self._check_vllm_server()
-        self.use_ollama = False
-
-        if self.use_server:
-            print(f"Using LLM server: {self.server_url}")
+        # If custom server URL is provided, prioritize it and skip Ollama check
+        if self.has_custom_server:
+            # Custom server URL provided - use it directly, don't check Ollama
+            self.use_server = True
+            self.use_ollama = False
+            print(f"Using custom LLM server: {self.server_url}")
             if self.api_key:
                 print("Using API key authentication")
-            logger.info(f"Using LLM server at {self.server_url}, skipping local model loading.")
+            logger.info(f"Using custom LLM server at {self.server_url}")
         else:
-            self.use_ollama = self._check_ollama_server()
-            if self.use_ollama:
-                print(f"Using Ollama server: {self.ollama_url} with model {self.ollama_model}")
-                logger.info(f"Using Ollama at {self.ollama_url} with model {self.ollama_model}")
+            # Default behavior: check vLLM server first, then Ollama
+            self.use_server = self._check_vllm_server()
+            self.use_ollama = False
+
+            if self.use_server:
+                print(f"Using LLM server: {self.server_url}")
+                if self.api_key:
+                    print("Using API key authentication")
+                logger.info(f"Using LLM server at {self.server_url}, skipping local model loading.")
             else:
-                print("No server available, loading model locally...")
-                self._load_model()
+                self.use_ollama = self._check_ollama_server()
+                if self.use_ollama:
+                    print(f"Using Ollama server: {self.ollama_url} with model {self.ollama_model}")
+                    logger.info(f"Using Ollama at {self.ollama_url} with model {self.ollama_model}")
+                else:
+                    print("No server available, loading model locally...")
+                    self._load_model()
 
     def _check_vllm_server(self):
         """Checks if the vLLM server is running."""
+        # If custom server URL is provided (not localhost), assume it's available
+        # Don't do health check for external servers
+        if self.has_custom_server:
+            return True
+        
+        # For localhost servers, do health check
         try:
             # Try health endpoint first
             health_url = self.server_url.replace("/v1/chat/completions", "/health")
@@ -108,10 +128,6 @@ class BAgent:
                 response = requests.head(self.server_url, headers=headers, timeout=2)
                 return response.status_code in [200, 405, 404]  # 405 = method not allowed but endpoint exists
             except requests.RequestException:
-                # If custom server URL is provided, assume it's available
-                # (might be external server that doesn't respond to health checks)
-                if "localhost" not in self.server_url and "127.0.0.1" not in self.server_url:
-                    return True
                 return False
 
     def _check_ollama_server(self):
