@@ -388,6 +388,23 @@ pip install -e .
 python -c "import medsim; print(medsim.__file__)"
 ```
 
+### Lỗi 5: ImportError: cannot import name 'AzureOpenAI' from 'openai'
+
+**Nguyên nhân:** File `gpt_structure.py` đang cố import `AzureOpenAI` từ package `openai==1.13.3`, nhưng class này không tồn tại trong version này.
+
+**Giải pháp:** Đã được sửa trong code. Nếu vẫn gặp lỗi:
+
+```bash
+# Kiểm tra file đã được sửa chưa
+grep -n "AzureOpenAI" Simulacra/reverie/backend_server/persona/prompt_template/gpt_structure.py
+
+# Nếu vẫn còn, sửa thủ công:
+# Xóa dòng: from openai import AzureOpenAI, OpenAI
+# Hoặc comment lại: # from openai import AzureOpenAI, OpenAI
+```
+
+**Lưu ý:** Code không sử dụng `AzureOpenAI` hay `OpenAI` - tất cả đã được thay bằng `BAgent`.
+
 ---
 
 ## Kiểm Tra và Test

@@ -7,7 +7,10 @@ Description: Wrapper functions for calling OpenAI APIs.
 import time 
 import json
 from pathlib import Path
-from openai import AzureOpenAI, OpenAI
+# Note: AzureOpenAI and OpenAI are not imported because:
+# 1. AzureOpenAI is not available in openai==1.13.3
+# 2. The code uses BAgent instead of direct OpenAI API calls
+# All OpenAI client code is commented out below
 
 from utils import *
 from openai_cost_logger import DEFAULT_LOG_PATH
