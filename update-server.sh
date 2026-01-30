@@ -2,19 +2,36 @@
 
 # Script để update code trên server từ Git
 # Chạy trên server: bash update-server.sh
+# Tự động discard local changes và pull mới hoàn toàn
 
 SERVER_PATH="/root/MedAgentSim"
+FORCE_PULL=${1:-"yes"}  # Mặc định force pull
 
 echo "=========================================="
 echo "Updating code from Git..."
 echo "Path: $SERVER_PATH"
+echo "Mode: $([ "$FORCE_PULL" = "yes" ] && echo "Force Pull (discard local changes)" || echo "Normal Pull")"
 echo "=========================================="
 
 cd "$SERVER_PATH" || exit 1
 
-# Pull latest code
-echo "Pulling latest code..."
-git pull
+# Fetch latest code
+echo "Fetching latest code..."
+git fetch origin
+
+# Check if there are local changes
+if [ -n "$(git status -s)" ] && [ "$FORCE_PULL" = "yes" ]; then
+    echo "⚠️  Local changes detected. Discarding them..."
+    git reset --hard origin/$(git branch --show-current)
+    echo "✅ Local changes discarded."
+elif [ -n "$(git status -s)" ]; then
+    echo "⚠️  Local changes detected. Attempting normal pull..."
+    git pull
+else
+    # Pull latest code
+    echo "Pulling latest code..."
+    git pull
+fi
 
 if [ $? -eq 0 ]; then
     echo ""

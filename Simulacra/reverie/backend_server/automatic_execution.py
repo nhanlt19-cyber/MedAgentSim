@@ -13,7 +13,19 @@ from typing import Tuple
 from pathlib import Path
 from datetime import datetime
 from multiprocessing import Process
-from openai_cost_logger import OpenAICostLoggerViz
+# Try to import openai_cost_logger, handle compatibility issues
+try:
+    from openai_cost_logger import OpenAICostLoggerViz
+except (ImportError, ModuleNotFoundError):
+    # Dummy class if not available
+    class OpenAICostLoggerViz:
+        @staticmethod
+        def print_experiment_cost(*args, **kwargs):
+            pass
+        @staticmethod
+        def print_total_cost(*args, **kwargs):
+            pass
+    print("Warning: OpenAICostLoggerViz not available. Cost logging disabled.")
 
 
 def parse_args() -> Tuple[str, str, int, bool]:

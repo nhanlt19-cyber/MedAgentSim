@@ -13,8 +13,28 @@ from pathlib import Path
 # All OpenAI client code is commented out below
 
 from utils import *
-from openai_cost_logger import DEFAULT_LOG_PATH
-from persona.prompt_template.openai_logger_singleton import OpenAICostLogger_Singleton
+
+# Try to import openai_cost_logger, but it's not compatible with openai==1.13.3
+# Since the code doesn't actually use it (all cost logging is commented out),
+# we'll make it optional
+try:
+    from openai_cost_logger import DEFAULT_LOG_PATH
+except (ImportError, ModuleNotFoundError):
+    # Fallback if openai_cost_logger is not available or incompatible
+    DEFAULT_LOG_PATH = "./logs"
+    print("Warning: openai_cost_logger not available. Using default log path.")
+
+try:
+    from persona.prompt_template.openai_logger_singleton import OpenAICostLogger_Singleton
+except (ImportError, ModuleNotFoundError):
+    # Create a dummy class if import fails
+    class OpenAICostLogger_Singleton:
+        def __init__(self, *args, **kwargs):
+            pass
+        def update_cost(self, *args, **kwargs):
+            pass
+    print("Warning: OpenAICostLogger_Singleton not available. Using dummy class.")
+
 import os 
 import sys
 from importlib import import_module

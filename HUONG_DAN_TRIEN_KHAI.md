@@ -405,6 +405,26 @@ grep -n "AzureOpenAI" Simulacra/reverie/backend_server/persona/prompt_template/g
 
 **Lưu ý:** Code không sử dụng `AzureOpenAI` hay `OpenAI` - tất cả đã được thay bằng `BAgent`.
 
+### Lỗi 6: ModuleNotFoundError: No module named 'openai._models'
+
+**Nguyên nhân:** Package `openai_cost_logger` không tương thích với `openai==1.13.3`. Package này cố import `openai._models` nhưng không tồn tại trong version này.
+
+**Giải pháp:** Đã được sửa trong code với try/except. Nếu vẫn gặp lỗi:
+
+```bash
+# Option 1: Uninstall và reinstall openai_cost_logger (nếu có version mới)
+pip uninstall openai-cost-logger
+pip install openai-cost-logger
+
+# Option 2: Upgrade openai (có thể gây lỗi khác)
+pip install --upgrade openai
+
+# Option 3: Kiểm tra file đã được sửa chưa
+grep -n "from openai_cost_logger" Simulacra/reverie/backend_server/persona/prompt_template/gpt_structure.py
+```
+
+**Lưu ý:** Code đã được sửa để import có điều kiện. Nếu `openai_cost_logger` không available, sẽ sử dụng dummy implementation (vì code không thực sự dùng cost logging).
+
 ---
 
 ## Kiểm Tra và Test

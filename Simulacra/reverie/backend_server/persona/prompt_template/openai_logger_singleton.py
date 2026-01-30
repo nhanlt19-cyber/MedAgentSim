@@ -1,6 +1,20 @@
 import threading
 
-from openai_cost_logger import OpenAICostLogger, DEFAULT_LOG_PATH
+# Try to import openai_cost_logger, but handle compatibility issues
+try:
+    from openai_cost_logger import OpenAICostLogger, DEFAULT_LOG_PATH
+except (ImportError, ModuleNotFoundError) as e:
+    # Fallback if openai_cost_logger is not available or incompatible with openai==1.13.3
+    DEFAULT_LOG_PATH = "./logs"
+    
+    # Create a dummy OpenAICostLogger class
+    class OpenAICostLogger:
+        def __init__(self, *args, **kwargs):
+            pass
+        def update_cost(self, *args, **kwargs):
+            pass
+    
+    print(f"Warning: openai_cost_logger not available ({e}). Using dummy implementation.")
 
 
 """ Metaclass for creating singletons."""
