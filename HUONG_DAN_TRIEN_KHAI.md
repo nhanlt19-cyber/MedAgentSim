@@ -425,6 +425,83 @@ grep -n "from openai_cost_logger" Simulacra/reverie/backend_server/persona/promp
 
 **Lưu ý:** Code đã được sửa để import có điều kiện. Nếu `openai_cost_logger` không available, sẽ sử dụng dummy implementation (vì code không thực sự dùng cost logging).
 
+### Lỗi 7: ModuleNotFoundError: Could not import module 'pipeline'
+
+**Nguyên nhân:** Package `transformers` chưa được cài đặt hoặc chưa đúng version, hoặc đang cố import 'pipeline' như một module độc lập.
+
+**Giải pháp:**
+
+```bash
+# Trên server
+conda activate mgent
+pip install --upgrade transformers torch torchvision torchaudio
+
+# Kiểm tra
+python -c "from transformers import pipeline; print('OK')"
+
+# Hoặc dùng script fix
+bash fix-pipeline.sh
+```
+
+**Lưu ý:** Luôn import đúng cách: `from transformers import pipeline`, không phải `import pipeline`.
+
+**Lỗi cụ thể:** `AttributeError: module 'PIL.Image' has no attribute 'Resampling'`
+
+**Nguyên nhân:** `transformers==5.0.0` yêu cầu `Pillow>=9.0.0`, nhưng đang dùng `Pillow==8.4.0`.
+
+**Giải pháp nhanh:**
+```bash
+conda activate mgent
+pip install --upgrade "Pillow>=9.0.0"
+python -c "from transformers import pipeline; print('OK')"
+```
+
+**Hoặc downgrade transformers:**
+```bash
+pip install transformers==4.48.0  # Tương thích với Pillow 8.4.0
+```
+
+### Lỗi 8: ImportError: cannot import name 'get_module_size_with_ties' from 'accelerate.utils.modeling'
+
+**Nguyên nhân:** `transformers==5.0.0` yêu cầu `accelerate>=0.30.0`, nhưng đang dùng `accelerate==0.26.0` (hoặc cũ hơn).
+
+**Giải pháp nhanh:**
+```bash
+conda activate mgent
+pip install --upgrade accelerate
+python -c "from transformers import pipeline; print('OK')"
+```
+
+**Hoặc cài version cụ thể:**
+```bash
+pip install "accelerate>=0.30.0" "transformers>=5.0.0"
+```
+
+**Lưu ý:** Nếu vẫn lỗi, có thể cần upgrade cả hai packages cùng lúc:
+```bash
+pip install --upgrade accelerate transformers
+```
+
+### Lỗi 9: KeyboardInterrupt khi import torch
+
+**Nguyên nhân:** Torch đang cố load CUDA và bị timeout hoặc interrupt trong quá trình initialization.
+
+**Giải pháp nhanh:**
+```bash
+# Force CPU-only mode
+export CUDA_VISIBLE_DEVICES=""
+conda activate mgent
+python -c "import torch; print('OK')"
+```
+
+**Hoặc cài CPU-only torch:**
+```bash
+pip uninstall torch torchvision torchaudio -y
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+```
+
+**Lưu ý:** Code đã được sửa để tự động fallback về CPU nếu CUDA có vấn đề. Nếu không cần GPU, nên dùng CPU-only torch để tránh timeout.
+
 ---
 
 ## Kiểm Tra và Test

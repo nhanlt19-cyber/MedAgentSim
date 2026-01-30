@@ -117,13 +117,25 @@ class BAgent:
         """Loads the model locally if no vLLM server is found."""
         logger.info("Loading model and tokenizer locally...")
         try:
+            # Set device to CPU if CUDA is not available or causing issues
+            import torch
+            device = "cpu"
+            if torch.cuda.is_available():
+                try:
+                    # Test if CUDA works
+                    torch.zeros(1).cuda()
+                    device = "auto"
+                except Exception as e:
+                    logger.warning(f"CUDA available but not working: {e}. Using CPU instead.")
+                    device = "cpu"
+            
             self.pipeline = pipeline(
                 "text-generation",
                 model=self.model_name,
-                device_map="auto",
+                device_map=device,
                 trust_remote_code=True
             )
-            logger.info("Model loaded successfully.")
+            logger.info(f"Model loaded successfully on {device}.")
         except ValueError as e:
             if "Unknown quantization type" in str(e):
                 logger.warning("Quantization not supported. Loading without quantization...")
