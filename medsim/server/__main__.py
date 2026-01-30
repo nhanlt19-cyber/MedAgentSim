@@ -66,7 +66,8 @@ def run_frontend_server(port=None):
             return False
             
         # Form command with proper string representation of path
-        command = f'python3 "{manage_py_path}" runserver {port}'
+        # Bind to 0.0.0.0 to allow remote access
+        command = f'python3 "{manage_py_path}" runserver 0.0.0.0:{port}'
         logger.info(f"Executing command: {command}")
         
         # Run the command with proper error handling
@@ -94,7 +95,8 @@ def run_frontend_server(port=None):
             return False
         else:
             logger.info(f"Server started successfully on port {port}")
-            logger.info(f"Server URL: http://127.0.0.1:{port}/")
+            logger.info(f"Server URL: http://0.0.0.0:{port}/ (accessible from remote)")
+            logger.info(f"Local access: http://127.0.0.1:{port}/")
             return True
             
     except Exception as e:

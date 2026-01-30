@@ -38,7 +38,8 @@ class BAgent:
         model_name="meta-llama/Llama-3.3-70B-Instruct",
         server_url="http://localhost:8012/v1/chat/completions",
         ollama_url="http://localhost:11434",
-        ollama_model="llama3.3:70b"
+        ollama_model="llama3.3:70b",
+        api_key=None
     ):
         """
         Initializes the BAgent:
@@ -48,22 +49,26 @@ class BAgent:
 
         Args:
             model_name: Model name for vLLM/transformers
-            server_url: vLLM server URL
+            server_url: vLLM server URL (can be custom LLM API endpoint)
             ollama_url: Ollama server URL (default: http://localhost:11434)
             ollama_model: Ollama model name (default: llama3.1)
+            api_key: API key for authentication (optional, for custom LLM servers)
         """
         self.server_url = server_url
         self.model_name = model_name
         self.ollama_url = ollama_url
         self.ollama_model = ollama_model
+        self.api_key = api_key or os.environ.get("LLM_API_KEY")
 
         # Check available backends in order of preference
         self.use_server = self._check_vllm_server()
         self.use_ollama = False
 
         if self.use_server:
-            print(f"Using vLLM server: {self.server_url}")
-            logger.info(f"Using vLLM server at {self.server_url}, skipping local model loading.")
+            print(f"Using LLM server: {self.server_url}")
+            if self.api_key:
+                print("Using API key authentication")
+            logger.info(f"Using LLM server at {self.server_url}, skipping local model loading.")
         else:
             self.use_ollama = self._check_ollama_server()
             if self.use_ollama:
@@ -76,10 +81,29 @@ class BAgent:
     def _check_vllm_server(self):
         """Checks if the vLLM server is running."""
         try:
-            response = requests.get(self.server_url.replace("/v1/chat/completions", "/health"), timeout=2)
+            # Try health endpoint first
+            health_url = self.server_url.replace("/v1/chat/completions", "/health")
+            headers = {}
+            if self.api_key:
+                headers["Authorization"] = f"Bearer {self.api_key}"
+            response = requests.get(health_url, headers=headers, timeout=2)
             return response.status_code == 200
         except requests.RequestException:
-            return False
+            # If health check fails, try a simple request to the chat endpoint
+            # Some servers don't have /health endpoint
+            try:
+                headers = {"Content-Type": "application/json"}
+                if self.api_key:
+                    headers["Authorization"] = f"Bearer {self.api_key}"
+                # Just check if endpoint is reachable (don't send full request)
+                response = requests.head(self.server_url, headers=headers, timeout=2)
+                return response.status_code in [200, 405, 404]  # 405 = method not allowed but endpoint exists
+            except requests.RequestException:
+                # If custom server URL is provided, assume it's available
+                # (might be external server that doesn't respond to health checks)
+                if "localhost" not in self.server_url and "127.0.0.1" not in self.server_url:
+                    return True
+                return False
 
     def _check_ollama_server(self):
         """Checks if the Ollama server is running."""
@@ -168,7 +192,7 @@ class BAgent:
 
     def _query_server(self, user_prompt, system_prompt, tries=10, timeout=20.0) -> str:
         """
-        Queries the vLLM model endpoint with system and user prompts.
+        Queries the LLM model endpoint with system and user prompts.
         Returns the generated text.
         """
         payload = {
@@ -181,6 +205,9 @@ class BAgent:
         }
 
         headers = {"Content-Type": "application/json"}
+        # Add API key to headers if provided
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
 
         for attempt in range(tries):
             try:
@@ -195,7 +222,8 @@ class BAgent:
                 return response_data["choices"][0]["message"]["content"].strip()
             except requests.exceptions.RequestException as e:
                 logger.warning(f"Server query attempt {attempt + 1} failed: {e}")
-                time.sleep(timeout)
+                if attempt < tries - 1:
+                    time.sleep(min(timeout, 5.0))
 
         logger.error("Max retries exceeded: Unable to fetch response from server.")
         return "Error: Failed to fetch response from server."

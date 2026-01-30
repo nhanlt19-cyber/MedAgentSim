@@ -8,7 +8,7 @@ from medsim.core.scenario import *
 from medsim.query_model import *
 def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor_llm, patient_llm,
          measurement_llm, moderator_llm, num_scenarios, dataset, img_request, total_inferences,
-         anthropic_api_key=None):
+         anthropic_api_key=None, llm_server_url=None, llm_api_key=None, ollama_url=None, ollama_model=None):
     openai.api_key = api_key
     anthropic_llms = ["claude3.5sonnet"]
     replicate_llms = ["llama-3-70b-instruct", "llama-2-70b-chat", "mixtral-8x7b"]
@@ -42,10 +42,22 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
     if num_scenarios is None:
         num_scenarios = scenario_loader.num_scenarios
     
-    meas_agent = MeasurementAgent(backend_str=measurement_llm)
-    patient_agent = PatientAgent(backend_str=patient_llm)
-    doctor_agent = DoctorAgent(backend_str=doctor_llm)
-    mpipe = BAgent(moderator_llm)
+    # Use custom LLM server or Ollama if provided
+    if llm_server_url:
+        meas_agent = MeasurementAgent(backend_str=measurement_llm, server_url=llm_server_url, api_key=llm_api_key)
+        patient_agent = PatientAgent(backend_str=patient_llm, server_url=llm_server_url, api_key=llm_api_key)
+        doctor_agent = DoctorAgent(backend_str=doctor_llm, server_url=llm_server_url, api_key=llm_api_key)
+        mpipe = BAgent(moderator_llm, server_url=llm_server_url, api_key=llm_api_key)
+    elif ollama_url and ollama_model:
+        meas_agent = MeasurementAgent(backend_str=measurement_llm, ollama_url=ollama_url, ollama_model=ollama_model)
+        patient_agent = PatientAgent(backend_str=patient_llm, ollama_url=ollama_url, ollama_model=ollama_model)
+        doctor_agent = DoctorAgent(backend_str=doctor_llm, ollama_url=ollama_url, ollama_model=ollama_model)
+        mpipe = BAgent(moderator_llm, ollama_url=ollama_url, ollama_model=ollama_model)
+    else:
+        meas_agent = MeasurementAgent(backend_str=measurement_llm)
+        patient_agent = PatientAgent(backend_str=patient_llm)
+        doctor_agent = DoctorAgent(backend_str=doctor_llm)
+        mpipe = BAgent(moderator_llm)
     for _scenario_id in range(0, min(num_scenarios, scenario_loader.num_scenarios)):
         total_presents += 1
         pi_dialogue = ""
@@ -154,10 +166,14 @@ if __name__ == "__main__":
     parser.add_argument('--num_scenarios', type=int, default=None, required=False, help='Number of scenarios to simulate')
     parser.add_argument('--total_inferences', type=int, default=20, required=False, help='Number of inferences between patient and doctor')
     parser.add_argument('--anthropic_api_key', type=str, default=None, required=False, help='Anthropic API key for Claude 3.5 Sonnet')
+    parser.add_argument('--llm_server_url', type=str, default=None, required=False, help='Custom LLM server URL (e.g., https://llmapi.iec-uit.com/v1/chat/completions)')
+    parser.add_argument('--llm_api_key', type=str, default=None, required=False, help='API key for custom LLM server')
+    parser.add_argument('--ollama_url', type=str, default=None, required=False, help='Ollama server URL (default: http://localhost:11434)')
+    parser.add_argument('--ollama_model', type=str, default=None, required=False, help='Ollama model name (e.g., Llama-3.3-8B-Instruct-128K.Q4_K_M)')
     
     args = parser.parse_args()
 
-    main(args.openai_api_key, args.replicate_api_key, args.inf_type, args.doctor_bias, args.patient_bias, args.doctor_llm, args.patient_llm, args.measurement_llm, args.moderator_llm, args.num_scenarios, args.agent_dataset, args.doctor_image_request, args.total_inferences, args.anthropic_api_key)
+    main(args.openai_api_key, args.replicate_api_key, args.inf_type, args.doctor_bias, args.patient_bias, args.doctor_llm, args.patient_llm, args.measurement_llm, args.moderator_llm, args.num_scenarios, args.agent_dataset, args.doctor_image_request, args.total_inferences, args.anthropic_api_key, args.llm_server_url, args.llm_api_key, args.ollama_url, args.ollama_model)
 
 
 ## terminal running bash

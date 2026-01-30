@@ -380,10 +380,16 @@ class BAAgent:
         )
 
 class PatientAgent:
-    def __init__(self, backend_str="Qwen/Qwen2.5-0.5B-Instruct") -> None:
+    def __init__(self, backend_str="Qwen/Qwen2.5-0.5B-Instruct", server_url=None, api_key=None, ollama_url=None, ollama_model=None) -> None:
         # language model backend for patient agent
         self.backend = backend_str
-        self.pipe = BAgent(model_name=backend_str)
+        if server_url:
+            self.pipe = BAgent(model_name=backend_str, server_url=server_url, api_key=api_key)
+        elif ollama_url and ollama_model:
+            # Use Ollama if specified
+            self.pipe = BAgent(model_name=backend_str, ollama_url=ollama_url, ollama_model=ollama_model)
+        else:
+            self.pipe = BAgent(model_name=backend_str)
 
     def update_scenario(self, scenario, bias_present=None):
         # disease of patient, or "correct answer"
@@ -452,12 +458,18 @@ class PatientAgent:
 
 
 class DoctorAgent:
-    def __init__(self, backend_str="gpt4", graph=False) -> None:
+    def __init__(self, backend_str="gpt4", graph=False, server_url=None, api_key=None, ollama_url=None, ollama_model=None) -> None:
         self.backend = backend_str
         # if graph:
         #     self.pipe = LBAgent(model_name=backend_str)
         # else:
-        self.pipe = BAgent(model_name=backend_str)
+        if server_url:
+            self.pipe = BAgent(model_name=backend_str, server_url=server_url, api_key=api_key)
+        elif ollama_url and ollama_model:
+            # Use Ollama if specified
+            self.pipe = BAgent(model_name=backend_str, ollama_url=ollama_url, ollama_model=ollama_model)
+        else:
+            self.pipe = BAgent(model_name=backend_str)
         self.num_doctors = 5
     def update_scenario(self, scenario, max_infs=20, bias_present=None, img_request=False):
         # number of inference calls to the doctor
@@ -601,10 +613,16 @@ class DoctorAgent:
 
 
 class MeasurementAgent:
-    def __init__(self, backend_str="gpt4") -> None:
+    def __init__(self, backend_str="gpt4", server_url=None, api_key=None, ollama_url=None, ollama_model=None) -> None:
         # language model backend for measurement agent
         self.backend = backend_str
-        self.pipe = BAgent(model_name=backend_str)
+        if server_url:
+            self.pipe = BAgent(model_name=backend_str, server_url=server_url, api_key=api_key)
+        elif ollama_url and ollama_model:
+            # Use Ollama if specified
+            self.pipe = BAgent(model_name=backend_str, ollama_url=ollama_url, ollama_model=ollama_model)
+        else:
+            self.pipe = BAgent(model_name=backend_str)
 
     def update_scenario(self, scenario):
         self.agent_hist = ""
