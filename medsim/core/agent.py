@@ -383,6 +383,17 @@ class PatientAgent:
     def __init__(self, backend_str="Qwen/Qwen2.5-0.5B-Instruct", server_url=None, api_key=None, ollama_url=None, ollama_model=None) -> None:
         # language model backend for patient agent
         self.backend = backend_str
+        
+        # Check environment variables if not provided
+        if not server_url:
+            server_url = os.environ.get("LLM_SERVER_URL")
+        if not api_key:
+            api_key = os.environ.get("LLM_API_KEY")
+        if not ollama_url:
+            ollama_url = os.environ.get("OLLAMA_URL")
+        if not ollama_model:
+            ollama_model = os.environ.get("OLLAMA_MODEL")
+        
         if server_url:
             self.pipe = BAgent(model_name=backend_str, server_url=server_url, api_key=api_key)
         elif ollama_url and ollama_model:
@@ -463,6 +474,17 @@ class DoctorAgent:
         # if graph:
         #     self.pipe = LBAgent(model_name=backend_str)
         # else:
+        
+        # Check environment variables if not provided
+        if not server_url:
+            server_url = os.environ.get("LLM_SERVER_URL")
+        if not api_key:
+            api_key = os.environ.get("LLM_API_KEY")
+        if not ollama_url:
+            ollama_url = os.environ.get("OLLAMA_URL")
+        if not ollama_model:
+            ollama_model = os.environ.get("OLLAMA_MODEL")
+        
         if server_url:
             self.pipe = BAgent(model_name=backend_str, server_url=server_url, api_key=api_key)
         elif ollama_url and ollama_model:
@@ -616,6 +638,17 @@ class MeasurementAgent:
     def __init__(self, backend_str="gpt4", server_url=None, api_key=None, ollama_url=None, ollama_model=None) -> None:
         # language model backend for measurement agent
         self.backend = backend_str
+        
+        # Check environment variables if not provided
+        if not server_url:
+            server_url = os.environ.get("LLM_SERVER_URL")
+        if not api_key:
+            api_key = os.environ.get("LLM_API_KEY")
+        if not ollama_url:
+            ollama_url = os.environ.get("OLLAMA_URL")
+        if not ollama_model:
+            ollama_model = os.environ.get("OLLAMA_MODEL")
+        
         if server_url:
             self.pipe = BAgent(model_name=backend_str, server_url=server_url, api_key=api_key)
         elif ollama_url and ollama_model:

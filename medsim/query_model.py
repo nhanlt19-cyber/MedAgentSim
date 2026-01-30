@@ -411,7 +411,14 @@ class BAgent:
         response_counts = {response: responses.count(response) for response in responses}
         return max(response_counts, key=response_counts.get)
 
-fallback_agent = BAgent()
+# Initialize fallback_agent with custom server if available from environment
+# This ensures fallback agent also uses custom LLM server instead of Ollama
+_llm_server_url = os.environ.get("LLM_SERVER_URL")
+_llm_api_key = os.environ.get("LLM_API_KEY")
+if _llm_server_url:
+    fallback_agent = BAgent(server_url=_llm_server_url, api_key=_llm_api_key)
+else:
+    fallback_agent = BAgent()
 
 def query_model(model_str: str,
                 prompt: str,
