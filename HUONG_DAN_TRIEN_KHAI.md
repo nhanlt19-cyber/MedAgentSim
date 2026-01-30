@@ -502,6 +502,35 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 
 **Lưu ý:** Code đã được sửa để tự động fallback về CPU nếu CUDA có vấn đề. Nếu không cần GPU, nên dùng CPU-only torch để tránh timeout.
 
+**Giải pháp bổ sung:**
+```bash
+# Set environment variable trước khi chạy
+export TORCH_DISABLE_DISTRIBUTED=1
+export CUDA_VISIBLE_DEVICES=""
+
+# Tạo thư mục temp_storage
+mkdir -p /root/MedAgentSim/Simulacra/environment/frontend_server/temp_storage
+
+# Chạy simulation
+conda activate mgent
+python -m medsim.simulate ...
+```
+
+### Lỗi 10: FileNotFoundError: temp_storage directory not found
+
+**Nguyên nhân:** Thư mục `temp_storage` chưa được tạo.
+
+**Giải pháp:**
+```bash
+# Tạo thư mục
+mkdir -p /root/MedAgentSim/Simulacra/environment/frontend_server/temp_storage
+
+# Hoặc dùng script
+bash create-temp-storage.sh
+```
+
+**Lưu ý:** Code đã được sửa để tự động tạo thư mục này, nhưng nên tạo trước để tránh lỗi.
+
 ---
 
 ## Kiểm Tra và Test

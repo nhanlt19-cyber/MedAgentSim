@@ -159,6 +159,10 @@ class ReverieServer:
     # used to communicate the code and step information to the frontend. 
     # Note that step file is removed as soon as the frontend opens up the 
     # simulation. 
+    # Ensure temp_storage directory exists
+    import os
+    os.makedirs(fs_temp_storage, exist_ok=True)
+    
     curr_sim_code = dict()
     curr_sim_code["sim_code"] = self.sim_code
     with open(f"{fs_temp_storage}/curr_sim_code.json", "w") as outfile: 

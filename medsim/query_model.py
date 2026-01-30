@@ -25,8 +25,17 @@ MIXTRAL_URL = "mistralai/mixtral-8x7b-instruct-v0.1"
 import time
 import requests
 import logging
-from transformers import pipeline, AutoConfig, AutoModel, AutoTokenizer
 import json
+import os
+
+# Set environment variable to avoid torch.distributed import issues
+# This prevents transformers from trying to import torch.distributed.tensor
+# which can cause KeyboardInterrupt/timeout issues
+os.environ.setdefault("TORCH_DISABLE_DISTRIBUTED", "1")
+
+# Note: transformers is imported lazily in _load_model() to avoid timeout issues
+# during module import. This prevents KeyboardInterrupt when importing
+# torch.distributed.tensor which transformers 5.0.0 tries to import.
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -117,6 +126,12 @@ class BAgent:
         """Loads the model locally if no vLLM server is found."""
         logger.info("Loading model and tokenizer locally...")
         try:
+            # Lazy import transformers here to avoid timeout during module import
+            # This prevents torch.distributed.tensor import issues
+            # Set environment variable before import
+            os.environ["TORCH_DISABLE_DISTRIBUTED"] = "1"
+            from transformers import pipeline, AutoConfig, AutoModel, AutoTokenizer
+            
             # Set device to CPU if CUDA is not available or causing issues
             import torch
             device = "cpu"
