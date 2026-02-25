@@ -170,6 +170,73 @@ if "DIAGNOSIS READY" in doctor_dialogue or _inf_id == total_inferences - 1:
 
 ---
 
+### 1.4. `medsim/main.py` – thêm tham số `--start_scenario` để chọn kịch bản cụ thể
+
+**Mục đích:**  
+Dễ dàng test **một scenario cụ thể** (ví dụ scenario 5, 10, 20…) mà vẫn giữ nguyên cơ chế `internal_discussion` giữa các bác sĩ.
+
+**Trước khi chỉnh:**
+
+```python
+for _scenario_id in range(0, min(num_scenarios, scenario_loader.num_scenarios)):
+    ...
+```
+
+**Sau khi chỉnh (rút gọn):**
+
+```python
+if num_scenarios is None:
+    num_scenarios = scenario_loader.num_scenarios
+
+start_id = globals().get("START_SCENARIO_ID", 0)
+
+for _scenario_id in range(start_id,
+                          min(start_id + num_scenarios, scenario_loader.num_scenarios)):
+    ...
+```
+
+Và phần `__main__` thêm tham số mới:
+
+```python
+parser.add_argument(
+    '--start_scenario',
+    type=int,
+    default=0,
+    required=False,
+    help='Index of first scenario to simulate (0-based)',
+)
+...
+args = parser.parse_args()
+START_SCENARIO_ID = args.start_scenario
+```
+
+**Cách sử dụng:**
+
+- Chạy **chỉ scenario 0** (mặc định):
+
+```bash
+python medsim/main.py --inf_type llm --doctor_llm ollama ... \
+  --agent_dataset MedQA \
+  --start_scenario 0 \
+  --num_scenarios 1
+```
+
+- Chạy **scenario 5** duy nhất:
+
+```bash
+python medsim/main.py --inf_type llm --doctor_llm ollama ... \
+  --agent_dataset MedQA \
+  --start_scenario 5 \
+  --num_scenarios 1
+```
+
+**Ảnh hưởng:**
+
+- Cho phép bạn **giữ nguyên toàn bộ logic internal_discussion** của `DoctorAgent` nhưng test trên nhiều ca bệnh khác nhau bằng cách chỉ đổi `--start_scenario`.
+- Hữu ích khi bạn muốn tìm những ca mà mô hình của mình có khả năng chẩn đoán đúng hơn (accuracy > 0%), hoặc so sánh kết quả giữa các model Ollama khác nhau trên cùng một scenario.
+
+---
+
 ## 2. Các README mới/bổ sung (tài liệu, không ảnh hưởng code)
 
 Các file README này **chỉ là tài liệu tham khảo**, không làm thay đổi hành vi chạy của chương trình.

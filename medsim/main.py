@@ -46,7 +46,10 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
     patient_agent = PatientAgent(backend_str=patient_llm)
     doctor_agent = DoctorAgent(backend_str=doctor_llm)
     mpipe = BAgent(moderator_llm)
-    for _scenario_id in range(0, min(num_scenarios, scenario_loader.num_scenarios)):
+    # Cho phép bắt đầu từ một scenario tùy ý (để dễ test từng ca riêng lẻ)
+    start_id = globals().get("START_SCENARIO_ID", 0)
+
+    for _scenario_id in range(start_id, min(start_id + num_scenarios, scenario_loader.num_scenarios)):
         total_presents += 1
         pi_dialogue = ""
         dialogue_history = []
@@ -154,12 +157,31 @@ if __name__ == "__main__":
     parser.add_argument('--agent_dataset', type=str, default='MedQA') # MedQA, MIMICIV or NEJM
     parser.add_argument('--doctor_image_request', type=bool, default=False) # whether images must be requested or are provided
     parser.add_argument('--num_scenarios', type=int, default=None, required=False, help='Number of scenarios to simulate')
+    parser.add_argument('--start_scenario', type=int, default=0, required=False, help='Index of first scenario to simulate (0-based)')
     parser.add_argument('--total_inferences', type=int, default=20, required=False, help='Number of inferences between patient and doctor')
     parser.add_argument('--anthropic_api_key', type=str, default=None, required=False, help='Anthropic API key for Claude 3.5 Sonnet')
     
     args = parser.parse_args()
 
-    main(args.openai_api_key, args.replicate_api_key, args.inf_type, args.doctor_bias, args.patient_bias, args.doctor_llm, args.patient_llm, args.measurement_llm, args.moderator_llm, args.num_scenarios, args.agent_dataset, args.doctor_image_request, args.total_inferences, args.anthropic_api_key)
+    # Lưu chỉ số scenario bắt đầu vào biến toàn cục để hàm main có thể truy cập
+    START_SCENARIO_ID = args.start_scenario
+
+    main(
+        args.openai_api_key,
+        args.replicate_api_key,
+        args.inf_type,
+        args.doctor_bias,
+        args.patient_bias,
+        args.doctor_llm,
+        args.patient_llm,
+        args.measurement_llm,
+        args.moderator_llm,
+        args.num_scenarios,
+        args.agent_dataset,
+        args.doctor_image_request,
+        args.total_inferences,
+        args.anthropic_api_key,
+    )
 
 
 ## terminal running bash
