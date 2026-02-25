@@ -62,8 +62,8 @@ Logic còn lại của `BAgent` (ưu tiên vLLM → Ollama → local transformer
 ### 1.2. `medsim/query_model.py` – cập nhật `_query_ollama` dùng API `/v1/chat/completions`
 
 **Mục đích:**  
-Phiên bản Ollama mới trên server Ubuntu trả 404 cho endpoint cũ `/api/chat`.  
-Đã sửa `_query_ollama` để dùng API tương thích OpenAI `/v1/chat/completions`.
+Trên các server Ollama khác nhau, endpoint có thể là `/api/generate`, `/api/chat` hoặc `/v1/chat/completions`.  
+Đã sửa `_query_ollama` để **thử lần lượt cả 3 endpoint** và parse đúng response tương ứng.
 
 **Trước khi chỉnh (rút gọn):**
 
@@ -83,7 +83,7 @@ def _query_ollama(self, user_prompt, system_prompt, tries=5, timeout=120.0) -> s
         "options": {"num_predict": 200, "temperature": 0.7},
     }
 
-    ...
+    response = requests.post(ollama_chat_url, ...)
     response_data = response.json()
     return response_data["message"]["content"].strip()
 ```
@@ -94,34 +94,42 @@ def _query_ollama(self, user_prompt, system_prompt, tries=5, timeout=120.0) -> s
 def _query_ollama(self, user_prompt, system_prompt, tries=5, timeout=120.0) -> str:
     """
     Queries the Ollama server with system and user prompts.
-    Ghi chú: các phiên bản Ollama mới (>= 0.5) ưu tiên API
-    tại `/v1/chat/completions`.
+
+    - Thử lần lượt: /v1/chat/completions → /api/chat → /api/generate
     """
-    ollama_chat_url = f"{self.ollama_url}/v1/chat/completions"
+    headers = {"Content-Type": "application/json"}
+    endpoints = [
+        ("v1", f"{self.ollama_url}/v1/chat/completions"),
+        ("chat", f"{self.ollama_url}/api/chat"),
+        ("generate", f"{self.ollama_url}/api/generate"),
+    ]
 
-    payload = {
-        "model": self.ollama_model,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        "stream": False,
-        "temperature": 0.7,
-        "max_tokens": 200,
-    }
+    for mode, url in endpoints:
+        for attempt in range(tries):
+            if mode in ("v1", "chat"):
+                payload = {...}  # messages dạng chat
+                response = requests.post(url, headers=headers, json=payload, ...)
+                if response.status_code == 404:
+                    break  # thử endpoint tiếp theo
+                data = response.json()
+                choices = data.get("choices")
+                message = choices[0].get("message", {})
+                content = message.get("content", "").strip()
+                return content
+            else:  # "generate"
+                payload = {...}  # prompt chuỗi duy nhất
+                response = requests.post(url, headers=headers, json=payload, ...)
+                data = response.json()
+                text = data.get("response", "").strip()
+                return text
 
-    ...
-    response_data = response.json()
-    choices = response_data.get("choices")
-    message = choices[0].get("message", {})
-    content = message.get("content", "").strip()
-    return content
+    return "Error: Failed to fetch response from Ollama."
 ```
 
 **Ảnh hưởng:**
 
-- Sửa lỗi 404 `http://localhost:11434/api/chat` khi gọi Ollama.
-- Kết quả được lấy theo format OpenAI-compatible (`choices[0].message.content`).
+- Sửa lỗi 404 cả với `/api/chat` lẫn `/v1/chat/completions` khi server chỉ hỗ trợ endpoint khác.
+- Tự động tương thích nhiều phiên bản Ollama mà không cần đổi code mỗi lần cập nhật.
 
 ---
 

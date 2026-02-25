@@ -38,7 +38,8 @@ class BAgent:
         model_name="meta-llama/Llama-3.2-3B-Instruct",  # ít được dùng nếu Ollama đã bật
         server_url="http://localhost:8012/v1/chat/completions",
         ollama_url="http://localhost:11434",
-        ollama_model="llama3.2",  # <–– trùng với model bạn đã pull
+        # tên model phải trùng với `ollama list`, ví dụ: llama3.2:3b
+        ollama_model="llama3.2:3b",
     ):
         """
         Initializes the BAgent:
@@ -176,51 +177,121 @@ class BAgent:
         """
         Queries the Ollama server with system and user prompts.
 
-        Ghi chú:
-        - Các phiên bản Ollama mới (>= 0.5) ưu tiên API tương thích OpenAI
-          tại `/v1/chat/completions` thay vì `/api/chat` như trước.
-        - Ở đây ta gọi trực tiếp endpoint `/v1/chat/completions` và parse
-          kết quả theo format OpenAI-compatible.
+        Ghi chú tương thích phiên bản:
+        - Một số bản Ollama chỉ hỗ trợ `/api/generate`.
+        - Bản mới hơn hỗ trợ thêm `/api/chat` hoặc `/v1/chat/completions` (OpenAI-compatible).
+        - Hàm này sẽ thử lần lượt: `/v1/chat/completions` → `/api/chat` → `/api/generate`.
         """
-        ollama_chat_url = f"{self.ollama_url}/v1/chat/completions"
-
-        payload = {
-            "model": self.ollama_model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            "stream": False,
-            "temperature": 0.7,
-            "max_tokens": 200,
-        }
-
         headers = {"Content-Type": "application/json"}
 
-        for attempt in range(tries):
-            try:
-                response = requests.post(
-                    ollama_chat_url, headers=headers, json=payload, timeout=timeout
-                )
-                response.raise_for_status()
-                response_data = response.json()
+        # Danh sách endpoint thử lần lượt: (chế_độ, URL)
+        endpoints = [
+            ("v1", f"{self.ollama_url}/v1/chat/completions"),
+            ("chat", f"{self.ollama_url}/api/chat"),
+            ("generate", f"{self.ollama_url}/api/generate"),
+        ]
 
-                # OpenAI-compatible API: choices[0].message.content
-                choices = response_data.get("choices")
-                if not choices:
-                    raise ValueError(f"Ollama response missing 'choices': {response_data}")
+        last_error: Exception | None = None
 
-                message = choices[0].get("message", {})
-                content = message.get("content", "").strip()
-                if not content:
-                    raise ValueError(f"Ollama response missing 'content': {response_data}")
+        for mode, url in endpoints:
+            for attempt in range(tries):
+                try:
+                    if mode in ("v1", "chat"):
+                        # API kiểu chat: nhận messages
+                        payload = {
+                            "model": self.ollama_model,
+                            "messages": [
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": user_prompt},
+                            ],
+                            "stream": False,
+                        }
+                        # Tham số tên hơi khác nhau giữa v1/chat và api/chat nhưng đều bỏ qua nếu không dùng
+                        if mode == "v1":
+                            payload["temperature"] = 0.7
+                            payload["max_tokens"] = 200
+                        else:
+                            payload["options"] = {
+                                "temperature": 0.7,
+                                "num_predict": 200,
+                            }
 
-                return content
-            except (requests.exceptions.RequestException, ValueError) as e:
-                logger.warning(f"Ollama query attempt {attempt + 1} failed: {e}")
-                time.sleep(min(timeout, 5.0))
+                        response = requests.post(
+                            url, headers=headers, json=payload, timeout=timeout
+                        )
+                        # Nếu endpoint không tồn tại, thử endpoint tiếp theo
+                        if response.status_code == 404:
+                            last_error = requests.HTTPError(
+                                f"{response.status_code} {response.reason} for {url}"
+                            )
+                            logger.warning(
+                                f"Ollama endpoint {url} not found (404), trying next endpoint..."
+                            )
+                            break
 
-        logger.error("Max retries exceeded: Unable to fetch response from Ollama.")
+                        response.raise_for_status()
+                        data = response.json()
+
+                        # v1/chat/completions & api/chat đều trả choices[0].message.content
+                        choices = data.get("choices")
+                        if not choices:
+                            raise ValueError(
+                                f"Ollama {mode} response missing 'choices': {data}"
+                            )
+                        message = choices[0].get("message", {})
+                        content = message.get("content", "").strip()
+                        if not content:
+                            raise ValueError(
+                                f"Ollama {mode} response missing 'content': {data}"
+                            )
+                        return content
+
+                    else:  # mode == "generate"
+                        # API cũ /api/generate: nhận prompt duy nhất
+                        prompt = f"{system_prompt}\n\n{user_prompt}"
+                        payload = {
+                            "model": self.ollama_model,
+                            "prompt": prompt,
+                            "stream": False,
+                            "options": {
+                                "temperature": 0.7,
+                                "num_predict": 200,
+                            },
+                        }
+                        response = requests.post(
+                            url, headers=headers, json=payload, timeout=timeout
+                        )
+                        if response.status_code == 404:
+                            last_error = requests.HTTPError(
+                                f"{response.status_code} {response.reason} for {url}"
+                            )
+                            logger.warning(
+                                f"Ollama endpoint {url} not found (404), no more endpoints to try."
+                            )
+                            break
+
+                        response.raise_for_status()
+                        data = response.json()
+                        # /api/generate trả trường 'response'
+                        text = data.get("response", "").strip()
+                        if not text:
+                            raise ValueError(
+                                f"Ollama generate response missing 'response': {data}"
+                            )
+                        return text
+
+                except (requests.exceptions.RequestException, ValueError) as e:
+                    last_error = e
+                    logger.warning(
+                        f"Ollama query attempt {attempt + 1} with endpoint {url} failed: {e}"
+                    )
+                    time.sleep(min(timeout, 5.0))
+
+            # Nếu thử nhiều lần mà không thành công với endpoint hiện tại, chuyển sang endpoint tiếp theo
+
+        logger.error(
+            f"Max retries exceeded across all Ollama endpoints. Last error: {last_error}"
+        )
         return "Error: Failed to fetch response from Ollama."
 
     def _query_server(self, user_prompt, system_prompt, tries=10, timeout=20.0) -> str:
