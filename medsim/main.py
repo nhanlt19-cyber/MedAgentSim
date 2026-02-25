@@ -89,7 +89,9 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
             dialogue_history.append({"speaker": "Doctor", "text": doctor_dialogue})
 
             # Check for diagnosis
-            if "DIAGNOSIS READY" in doctor_dialogue or _inf_id == total_inferences:
+            # Lưu ý: vòng lặp chạy từ 0 → total_inferences-1
+            # nên điều kiện kết thúc theo số lượt phải là (_inf_id == total_inferences - 1)
+            if "DIAGNOSIS READY" in doctor_dialogue or _inf_id == total_inferences - 1:
                 correctness = compare_results(doctor_dialogue, scenario.diagnosis_information(), mpipe)
                 if correctness:
                     total_correct += 1

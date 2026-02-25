@@ -133,6 +133,43 @@ def _query_ollama(self, user_prompt, system_prompt, tries=5, timeout=120.0) -> s
 
 ---
 
+### 1.3. `medsim/main.py` – sửa điều kiện kết thúc để luôn có kết quả cuối cùng
+
+**Mục đích:**  
+Đảm bảo sau khi chạy hết số lượt hỏi đáp (`total_inferences`), chương trình **luôn in ra kết quả cuối cùng** (Correct answer + CORRECT/INCORRECT) ngay cả khi model không in chuỗi `"DIAGNOSIS READY"`.
+
+**Trước khi chỉnh:**
+
+```python
+# Check for diagnosis
+if "DIAGNOSIS READY" in doctor_dialogue or _inf_id == total_inferences:
+    correctness = compare_results(...)
+    ...
+```
+
+Vòng lặp for chạy với `_inf_id` từ `0` đến `total_inferences - 1`, nên điều kiện `_inf_id == total_inferences` **không bao giờ xảy ra** → nếu model không gõ đúng `"DIAGNOSIS READY"` thì sẽ không bao giờ in kết quả tổng kết.
+
+**Sau khi chỉnh:**
+
+```python
+# Check for diagnosis
+# Lưu ý: vòng lặp chạy từ 0 → total_inferences-1
+# nên điều kiện kết thúc theo số lượt phải là (_inf_id == total_inferences - 1)
+if "DIAGNOSIS READY" in doctor_dialogue or _inf_id == total_inferences - 1:
+    correctness = compare_results(...)
+    ...
+```
+
+**Ảnh hưởng:**
+
+- Ở **lượt cuối cùng** (khi `_inf_id == total_inferences - 1`), chương trình **luôn**:
+  - Gọi `compare_results` để so sánh với ground truth.
+  - In `Correct answer: ...` và `Scene X, The diagnosis was ...` ra terminal.
+  - Ghi thêm object `DIAGNOSIS_READY_*` vào `dialogue_history.json`.
+- Nếu model chủ động in `"DIAGNOSIS READY"` sớm hơn, điều kiện đầu vẫn hoạt động như trước.
+
+---
+
 ## 2. Các README mới/bổ sung (tài liệu, không ảnh hưởng code)
 
 Các file README này **chỉ là tài liệu tham khảo**, không làm thay đổi hành vi chạy của chương trình.
