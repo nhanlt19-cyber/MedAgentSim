@@ -1,4 +1,3 @@
-
 import os
 import time
 import re
@@ -32,13 +31,14 @@ import json
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+
 class BAgent:
     def __init__(
         self,
-        model_name="meta-llama/Llama-3.3-70B-Instruct",
+        model_name="meta-llama/Llama-3.2-3B-Instruct",  # ít được dùng nếu Ollama đã bật
         server_url="http://localhost:8012/v1/chat/completions",
         ollama_url="http://localhost:11434",
-        ollama_model="llama3.3:70b"
+        ollama_model="llama3.2",  # <–– trùng với model bạn đã pull
     ):
         """
         Initializes the BAgent:
@@ -63,12 +63,18 @@ class BAgent:
 
         if self.use_server:
             print(f"Using vLLM server: {self.server_url}")
-            logger.info(f"Using vLLM server at {self.server_url}, skipping local model loading.")
+            logger.info(
+                f"Using vLLM server at {self.server_url}, skipping local model loading."
+            )
         else:
             self.use_ollama = self._check_ollama_server()
             if self.use_ollama:
-                print(f"Using Ollama server: {self.ollama_url} with model {self.ollama_model}")
-                logger.info(f"Using Ollama at {self.ollama_url} with model {self.ollama_model}")
+                print(
+                    f"Using Ollama server: {self.ollama_url} with model {self.ollama_model}"
+                )
+                logger.info(
+                    f"Using Ollama at {self.ollama_url} with model {self.ollama_model}"
+                )
             else:
                 print("No server available, loading model locally...")
                 self._load_model()
@@ -76,7 +82,9 @@ class BAgent:
     def _check_vllm_server(self):
         """Checks if the vLLM server is running."""
         try:
-            response = requests.get(self.server_url.replace("/v1/chat/completions", "/health"), timeout=2)
+            response = requests.get(
+                self.server_url.replace("/v1/chat/completions", "/health"), timeout=2
+            )
             return response.status_code == 200
         except requests.RequestException:
             return False
@@ -97,20 +105,37 @@ class BAgent:
                 "text-generation",
                 model=self.model_name,
                 device_map="auto",
-                trust_remote_code=True
+                trust_remote_code=True,
             )
             logger.info("Model loaded successfully.")
         except ValueError as e:
             if "Unknown quantization type" in str(e):
-                logger.warning("Quantization not supported. Loading without quantization...")
+                logger.warning(
+                    "Quantization not supported. Loading without quantization..."
+                )
                 try:
-                    config = AutoConfig.from_pretrained(self.model_name, trust_remote_code=True)
+                    config = AutoConfig.from_pretrained(
+                        self.model_name, trust_remote_code=True
+                    )
                     if hasattr(config, "quantization_config"):
                         delattr(config, "quantization_config")
 
-                    model = AutoModel.from_pretrained(self.model_name, config=config, device_map="auto", trust_remote_code=True)
-                    tokenizer = AutoTokenizer.from_pretrained(self.model_name, trust_remote_code=True)
-                    self.pipeline = pipeline("text-generation", model=model, tokenizer=tokenizer, device_map="auto", trust_remote_code=True)
+                    model = AutoModel.from_pretrained(
+                        self.model_name,
+                        config=config,
+                        device_map="auto",
+                        trust_remote_code=True,
+                    )
+                    tokenizer = AutoTokenizer.from_pretrained(
+                        self.model_name, trust_remote_code=True
+                    )
+                    self.pipeline = pipeline(
+                        "text-generation",
+                        model=model,
+                        tokenizer=tokenizer,
+                        device_map="auto",
+                        trust_remote_code=True,
+                    )
                     logger.info("Model loaded successfully without quantization.")
                 except Exception as e:
                     logger.error(f"Failed to load model without quantization: {e}")
@@ -119,47 +144,79 @@ class BAgent:
                 logger.error(f"Unexpected error during model loading: {e}")
                 raise
 
-    def query_model(self, prompt, system_prompt="You are a helpful assistant.", tries=5, timeout=120, image_requested=False, scene=None, max_prompt_len=2500, clip_prompt=False, thread_id=1):
+    def query_model(
+        self,
+        prompt,
+        system_prompt="You are a helpful assistant.",
+        tries=5,
+        timeout=120,
+        image_requested=False,
+        scene=None,
+        max_prompt_len=2500,
+        clip_prompt=False,
+        thread_id=1,
+    ):
         """Queries available backend: vLLM server > Ollama > local model."""
         if self.use_server:
             return self._query_server(prompt, system_prompt, tries, timeout)
         elif self.use_ollama:
             return self._query_ollama(prompt, system_prompt, tries, timeout)
-        return self._query_local(prompt, system_prompt, image_requested, scene, max_prompt_len, clip_prompt, tries, timeout)
+        return self._query_local(
+            prompt,
+            system_prompt,
+            image_requested,
+            scene,
+            max_prompt_len,
+            clip_prompt,
+            tries,
+            timeout,
+        )
 
     def _query_ollama(self, user_prompt, system_prompt, tries=5, timeout=120.0) -> str:
         """
         Queries the Ollama server with system and user prompts.
-        Returns the generated text.
+
+        Ghi chú:
+        - Các phiên bản Ollama mới (>= 0.5) ưu tiên API tương thích OpenAI
+          tại `/v1/chat/completions` thay vì `/api/chat` như trước.
+        - Ở đây ta gọi trực tiếp endpoint `/v1/chat/completions` và parse
+          kết quả theo format OpenAI-compatible.
         """
-        # Ollama supports OpenAI-compatible API at /v1/chat/completions
-        # or native API at /api/chat
-        ollama_chat_url = f"{self.ollama_url}/api/chat"
+        ollama_chat_url = f"{self.ollama_url}/v1/chat/completions"
 
         payload = {
             "model": self.ollama_model,
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
+                {"role": "user", "content": user_prompt},
             ],
             "stream": False,
-            "options": {
-                "num_predict": 200,
-                "temperature": 0.7
-            }
+            "temperature": 0.7,
+            "max_tokens": 200,
         }
 
         headers = {"Content-Type": "application/json"}
 
         for attempt in range(tries):
             try:
-                response = requests.post(ollama_chat_url, headers=headers, json=payload, timeout=timeout)
+                response = requests.post(
+                    ollama_chat_url, headers=headers, json=payload, timeout=timeout
+                )
                 response.raise_for_status()
                 response_data = response.json()
 
-                # Ollama native API returns response in 'message.content'
-                return response_data["message"]["content"].strip()
-            except requests.exceptions.RequestException as e:
+                # OpenAI-compatible API: choices[0].message.content
+                choices = response_data.get("choices")
+                if not choices:
+                    raise ValueError(f"Ollama response missing 'choices': {response_data}")
+
+                message = choices[0].get("message", {})
+                content = message.get("content", "").strip()
+                if not content:
+                    raise ValueError(f"Ollama response missing 'content': {response_data}")
+
+                return content
+            except (requests.exceptions.RequestException, ValueError) as e:
                 logger.warning(f"Ollama query attempt {attempt + 1} failed: {e}")
                 time.sleep(min(timeout, 5.0))
 
@@ -175,16 +232,18 @@ class BAgent:
             "model": self.model_name,
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
+                {"role": "user", "content": user_prompt},
             ],
-            "max_tokens": 200 # Control response length
+            "max_tokens": 200,  # Control response length
         }
 
         headers = {"Content-Type": "application/json"}
 
         for attempt in range(tries):
             try:
-                response = requests.post(self.server_url, headers=headers, json=payload, timeout=timeout)
+                response = requests.post(
+                    self.server_url, headers=headers, json=payload, timeout=timeout
+                )
                 response.raise_for_status()
                 response_data = response.json()
 
@@ -200,7 +259,17 @@ class BAgent:
         logger.error("Max retries exceeded: Unable to fetch response from server.")
         return "Error: Failed to fetch response from server."
 
-    def _query_local(self, prompt, system_prompt, image_requested=False, scene=None, max_prompt_len=2500, clip_prompt=False, tries=3, timeout=5.0):
+    def _query_local(
+        self,
+        prompt,
+        system_prompt,
+        image_requested=False,
+        scene=None,
+        max_prompt_len=2500,
+        clip_prompt=False,
+        tries=3,
+        timeout=5.0,
+    ):
         """Uses the locally loaded model to generate responses."""
         for attempt in range(tries):
             try:
@@ -208,19 +277,27 @@ class BAgent:
                     prompt = prompt[:max_prompt_len]
 
                 if image_requested:
-                    if scene is None or not hasattr(scene, 'image_url'):
-                        raise ValueError("Image requested but no scene or image_url provided.")
+                    if scene is None or not hasattr(scene, "image_url"):
+                        raise ValueError(
+                            "Image requested but no scene or image_url provided."
+                        )
                     messages = [
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": [
-                            {"type": "text", "text": prompt},
-                            {"type": "image_url", "image_url": {"url": scene.image_url}}
-                        ]}
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {"url": scene.image_url},
+                                },
+                            ],
+                        },
                     ]
                 else:
                     messages = [
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": prompt}
+                        {"role": "user", "content": prompt},
                     ]
 
                 outputs = self.pipeline(
@@ -228,33 +305,38 @@ class BAgent:
                     max_new_tokens=200,
                     do_sample=True,
                     temperature=0.7,
-                    top_p=0.9
+                    top_p=0.9,
                 )
-                return outputs[0]['generated_text'][-1]['content']
+                return outputs[0]["generated_text"][-1]["content"]
             except Exception as e:
                 logger.warning(f"Local query attempt {attempt + 1} failed: {e}")
                 time.sleep(timeout)
 
-        logger.error("Max retries exceeded: Unable to generate response from local model.")
+        logger.error(
+            "Max retries exceeded: Unable to generate response from local model."
+        )
         return "Error: Failed to generate response from local model."
-    def _query_server_wot_system_prompt(self, user_prompt, tries=5, timeout=15.0) -> str:
+
+    def _query_server_wot_system_prompt(
+        self, user_prompt, tries=5, timeout=15.0
+    ) -> str:
         """
         Queries the vLLM model endpoint with only the user prompt.
         Returns the generated text.
         """
         payload = {
             "model": self.model_name,
-            "messages": [
-                {"role": "user", "content": user_prompt}
-            ],
-            "max_tokens": 80  # Control response length
+            "messages": [{"role": "user", "content": user_prompt}],
+            "max_tokens": 80,  # Control response length
         }
 
         headers = {"Content-Type": "application/json"}
 
         for attempt in range(tries):
             try:
-                response = requests.post(self.server_url, headers=headers, json=payload, timeout=timeout)
+                response = requests.post(
+                    self.server_url, headers=headers, json=payload, timeout=timeout
+                )
                 response.raise_for_status()
                 response_data = response.json()
 
@@ -269,7 +351,7 @@ class BAgent:
 
         logger.error("Max retries exceeded: Unable to fetch response from server.")
         return "Error: Failed to fetch response from server."
-    
+
     def query_model_with_ensembling(
         self,
         prompt,
@@ -281,7 +363,7 @@ class BAgent:
         max_prompt_len=2**14,
         clip_prompt=False,
         thread_id=1,
-        shuffle_ensemble_count=3  # Number of ensembles to create using choice shuffling
+        shuffle_ensemble_count=3,  # Number of ensembles to create using choice shuffling
     ):
         for attempt in range(tries):
             if clip_prompt:
@@ -296,7 +378,9 @@ class BAgent:
 
                     # Use the pipeline to generate the response
                     # breakpoint()
-                    outputs = self._query_server(shuffled_prompt, system_prompt, tries, timeout)#self._query_server_wot_system_prompt(messages)
+                    outputs = self._query_server(
+                        shuffled_prompt, system_prompt, tries, timeout
+                    )  # self._query_server_wot_system_prompt(messages)
                     responses.append(outputs)
 
                 # Aggregate responses (e.g., majority vote, longest consistent response, etc.)
@@ -315,19 +399,28 @@ class BAgent:
         choices = re.findall(choices_pattern, prompt)
         if choices:
             random.shuffle(choices)
-            shuffled_prompt = re.sub(choices_pattern, lambda match: choices.pop(0), prompt, count=len(choices))
+            shuffled_prompt = re.sub(
+                choices_pattern,
+                lambda match: choices.pop(0),
+                prompt,
+                count=len(choices),
+            )
             return shuffled_prompt
         return prompt
+
     def build_messages(self, system_prompt, prompt, image_requested, scene):
         if image_requested:
-            if scene is None or not hasattr(scene, 'image_url'):
+            if scene is None or not hasattr(scene, "image_url"):
                 raise ValueError("Image requested but no scene or image_url provided.")
             return [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": scene.image_url}},
-                ]},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": scene.image_url}},
+                    ],
+                },
             ]
         else:
             return [
@@ -337,20 +430,26 @@ class BAgent:
 
     def aggregate_responses(self, responses):
         # Aggregate responses (e.g., by selecting the most common one)
-        response_counts = {response: responses.count(response) for response in responses}
+        response_counts = {
+            response: responses.count(response) for response in responses
+        }
         return max(response_counts, key=response_counts.get)
+
 
 fallback_agent = BAgent()
 
-def query_model(model_str: str,
-                prompt: str,
-                system_prompt: str,
-                tries: int = 1,
-                timeout: float = 30.0,
-                image_requested: bool = False,
-                scene=None,
-                max_prompt_len: int = 2 ** 14,
-                clip_prompt: bool = False):
+
+def query_model(
+    model_str: str,
+    prompt: str,
+    system_prompt: str,
+    tries: int = 1,
+    timeout: float = 30.0,
+    image_requested: bool = False,
+    scene=None,
+    max_prompt_len: int = 2**14,
+    clip_prompt: bool = False,
+):
     """
     Queries the specified language model with the given prompt and system prompt.
     Retries the query if an exception occurs.
@@ -370,10 +469,16 @@ def query_model(model_str: str,
             if image_requested:
                 messages = [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": [
-                        {"type": "text", "text": prompt},
-                        {"type": "image_url", "image_url": {"url": f"{scene.image_url}"}}
-                    ]},
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"{scene.image_url}"},
+                            },
+                        ],
+                    },
                 ]
                 if model_str == "gpt4v":
                     response = openai.ChatCompletion.create(
@@ -416,7 +521,7 @@ def query_model(model_str: str,
                 }
                 messages = [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt}
+                    {"role": "user", "content": prompt},
                 ]
                 response = openai.ChatCompletion.create(
                     model=model_map[model_str],
@@ -437,57 +542,74 @@ def query_model(model_str: str,
                 answer = re.sub(r"\s+", " ", answer)
 
             elif model_str == "claude3.5sonnet":
-                client_anthropic = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+                client_anthropic = anthropic.Anthropic(
+                    api_key=os.environ["ANTHROPIC_API_KEY"]
+                )
                 message = client_anthropic.messages.create(
                     model="claude-3-5-sonnet-20240620",
                     system=system_prompt,
                     max_tokens=256,
-                    messages=[{"role": "user", "content": prompt}]
+                    messages=[{"role": "user", "content": prompt}],
                 )
                 answer = json.loads(message.to_json())["content"][0]["text"]
 
             elif model_str == "meta/llama-3.1-405b-instruct":
                 from openai import OpenAI  # Assuming OpenAI integration for this model
+
                 client_nvidia = OpenAI(
                     base_url="https://integrate.api.nvidia.com/v1",
-                    api_key="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"
+                    api_key="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",
                 )
                 response = client_nvidia.chat.completions.create(
                     model="meta/llama-3.1-405b-instruct",
-                    messages=[{"role": "user", "content": "Write a limerick about the wonders of GPU computing."}],
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": "Write a limerick about the wonders of GPU computing.",
+                        }
+                    ],
                     temperature=0.2,
                     top_p=0.7,
                     max_tokens=1024,
-                    stream=True
+                    stream=True,
                 )
                 answer = response["choices"][0]["message"]["content"]
                 answer = re.sub(r"\s+", " ", answer)
 
-            elif model_str == 'llama-2-70b-chat':
-                output = replicate.run(LLAMA2_URL, input={
-                    "prompt": prompt,
-                    "system_prompt": system_prompt,
-                    "max_new_tokens": 200
-                })
-                answer = ''.join(output)
+            elif model_str == "llama-2-70b-chat":
+                output = replicate.run(
+                    LLAMA2_URL,
+                    input={
+                        "prompt": prompt,
+                        "system_prompt": system_prompt,
+                        "max_new_tokens": 200,
+                    },
+                )
+                answer = "".join(output)
                 answer = re.sub(r"\s+", " ", answer)
 
-            elif model_str == 'mixtral-8x7b':
-                output = replicate.run(MIXTRAL_URL, input={
-                    "prompt": prompt,
-                    "system_prompt": system_prompt,
-                    "max_new_tokens": 75
-                })
-                answer = ''.join(output)
+            elif model_str == "mixtral-8x7b":
+                output = replicate.run(
+                    MIXTRAL_URL,
+                    input={
+                        "prompt": prompt,
+                        "system_prompt": system_prompt,
+                        "max_new_tokens": 75,
+                    },
+                )
+                answer = "".join(output)
                 answer = re.sub(r"\s+", " ", answer)
 
-            elif model_str == 'llama-3-70b-instruct':
-                output = replicate.run(LLAMA3_URL, input={
-                    "prompt": prompt,
-                    "system_prompt": system_prompt,
-                    "max_new_tokens": 200
-                })
-                answer = ''.join(output)
+            elif model_str == "llama-3-70b-instruct":
+                output = replicate.run(
+                    LLAMA3_URL,
+                    input={
+                        "prompt": prompt,
+                        "system_prompt": system_prompt,
+                        "max_new_tokens": 200,
+                    },
+                )
+                answer = "".join(output)
                 answer = re.sub(r"\s+", " ", answer)
 
             elif "GR_" in model_str:
@@ -514,16 +636,15 @@ def query_model(model_str: str,
                     "model": ollama_model,
                     "messages": [
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": prompt}
+                        {"role": "user", "content": prompt},
                     ],
                     "stream": False,
-                    "options": {
-                        "num_predict": 200,
-                        "temperature": 0.7
-                    }
+                    "options": {"num_predict": 200, "temperature": 0.7},
                 }
                 headers = {"Content-Type": "application/json"}
-                response = requests.post(ollama_chat_url, headers=headers, json=payload, timeout=timeout)
+                response = requests.post(
+                    ollama_chat_url, headers=headers, json=payload, timeout=timeout
+                )
                 response.raise_for_status()
                 response_data = response.json()
                 answer = response_data["message"]["content"].strip()
@@ -560,6 +681,7 @@ def import_generate():
     # Return the function generate_single from the module
     return module.generate_single
 
+
 def get_result_json():
     """
     Extracts and reads the JSON data from result.json.gz, then deletes the file.
@@ -571,7 +693,17 @@ def get_result_json():
     root_dir = os.path.dirname(os.path.dirname(current_file))  # Move up two levels
 
     # Construct the path to the result.json.gz file
-    json_gz_path = os.path.join(root_dir, "MedPromptSimulate", "src", "promptbase", "generations", "expt", "train", "cot", "result.json.gz")
+    json_gz_path = os.path.join(
+        root_dir,
+        "MedPromptSimulate",
+        "src",
+        "promptbase",
+        "generations",
+        "expt",
+        "train",
+        "cot",
+        "result.json.gz",
+    )
 
     # Ensure the file exists
     if not os.path.exists(json_gz_path):
@@ -582,8 +714,9 @@ def get_result_json():
 
     return json_data
 
+
 def get_diagnosis(backend, scenario_id):
-    generate_single = import_generate() # mmlu
+    generate_single = import_generate()  # mmlu
     generate_single(backend, scenario_id, "temp_question.json")
 
     # Usage Example
@@ -597,31 +730,34 @@ def get_diagnosis(backend, scenario_id):
 
     return dia
 
+
 def extract_bracket_content(s: str):
     if "[" in s or "]" in s:
         return "[" + s.split("[", 1)[-1].split("]")[0] + "]"
     return s  # Return original string if brackets are not found
 
+
 def clean_diagnosis(message):
     message = extract_bracket_content(message)
-    
+
     message = message.replace("'", "")
-    message = message.replace('"', '')
+    message = message.replace('"', "")
     message = message.replace("```python", "")
     message = message.replace("```", "")
     message = message.replace("\n", "")
     message = message.replace(", ", ",")
     formatted_str = message.strip()
-    formatted_str = formatted_str.replace('[', '["')
-    formatted_str = formatted_str.replace(']', '"]')
-    if "., " in formatted_str or ".,\"" in formatted_str:
+    formatted_str = formatted_str.replace("[", '["')
+    formatted_str = formatted_str.replace("]", '"]')
+    if "., " in formatted_str or '.,"' in formatted_str:
         formatted_str = formatted_str.replace(".,", '.", "')
     else:
         formatted_str = formatted_str.replace(",", '", "')
-    
+
     diagnosis_list = eval(formatted_str)
     diagnosis_list = [dia.strip() for dia in diagnosis_list]
     return diagnosis_list
+
 
 def generate_possible_diagnoses(question: str, answer: str, backend: str):
     """
@@ -654,7 +790,9 @@ def generate_possible_diagnoses(question: str, answer: str, backend: str):
     return diagnoses
 
 
-def generate_possible_diagnoses_from_discussion(question: str, doctor_discussion: str, backend: str):
+def generate_possible_diagnoses_from_discussion(
+    question: str, doctor_discussion: str, backend: str
+):
     """
     Generates a Python list of 4 possible diagnoses based on the doctor discussion.
     This version does NOT use the ground truth answer - it extracts candidates purely
@@ -674,7 +812,7 @@ def generate_possible_diagnoses_from_discussion(question: str, doctor_discussion
         f"in the discussion. Ensure the diagnoses are unique and medically plausible.\n\n"
         f"Question: {question}\n\n"
         f"Doctor Discussion:\n{doctor_discussion}\n\n"
-        f"Provide exactly 4 diagnoses in a Python list format, e.g., [\"Diagnosis 1\", \"Diagnosis 2\", \"Diagnosis 3\", \"Diagnosis 4\"].\n"
+        f'Provide exactly 4 diagnoses in a Python list format, e.g., ["Diagnosis 1", "Diagnosis 2", "Diagnosis 3", "Diagnosis 4"].\n'
         f"Extract these from what the doctors are actually discussing - do not invent new diagnoses."
     )
 
@@ -710,10 +848,14 @@ def generate_answer_choices_from_candidates(candidate_diagnoses: list):
     Returns:
         dict: Mapping of letter choices (A, B, C, D) to diagnoses.
     """
-    letter_answers = ['A', 'B', 'C', 'D']
+    letter_answers = ["A", "B", "C", "D"]
 
     # Ensure we have exactly 4 candidates
-    candidates = candidate_diagnoses[:4] if len(candidate_diagnoses) >= 4 else candidate_diagnoses
+    candidates = (
+        candidate_diagnoses[:4]
+        if len(candidate_diagnoses) >= 4
+        else candidate_diagnoses
+    )
     while len(candidates) < 4:
         candidates.append(f"Other diagnosis {len(candidates) + 1}")
 
@@ -722,15 +864,22 @@ def generate_answer_choices_from_candidates(candidate_diagnoses: list):
 
     return result
 
+
 def generate_answer_choices(correct_answer, answer_list):
-    letter_answers = ['A', 'B', 'C', 'D']
+    letter_answers = ["A", "B", "C", "D"]
     answer_list.append(correct_answer)
     random.shuffle(answer_list)  # Shuffle the list
     result = dict(zip(letter_answers, answer_list))  # Map keys to shuffled conditions
     answer_letter = letter_answers[answer_list.index(correct_answer)]
     return result, answer_letter
 
-def generate_question_json(question: str, answer_choices: dict, correct_answer: str, filename: str = "temp_question.json"):
+
+def generate_question_json(
+    question: str,
+    answer_choices: dict,
+    correct_answer: str,
+    filename: str = "temp_question.json",
+):
     """
     Generates and saves a JSON file with a question, answer choices, and the correct answer.
 
@@ -745,7 +894,7 @@ def generate_question_json(question: str, answer_choices: dict, correct_answer: 
             "id": 1,
             "question": question,
             "answer_choices": answer_choices,
-            "correct_answer": correct_answer
+            "correct_answer": correct_answer,
         }
     ]
 
@@ -756,7 +905,9 @@ def generate_question_json(question: str, answer_choices: dict, correct_answer: 
     root_dir = os.path.dirname(os.path.dirname(current_file))  # Move up two levels
 
     # Construct the destination folder path
-    save_folder = os.path.join(root_dir, "MedPromptSimulate", "src", "promptbase", "datasets", "mmlu", "train")
+    save_folder = os.path.join(
+        root_dir, "MedPromptSimulate", "src", "promptbase", "datasets", "mmlu", "train"
+    )
 
     # Construct the full file path
     save_path = os.path.join(save_folder, filename)
@@ -766,7 +917,9 @@ def generate_question_json(question: str, answer_choices: dict, correct_answer: 
         json.dump(data, f, indent=4, ensure_ascii=False)
 
 
-def generate_question_json_no_answer(question: str, answer_choices: dict, filename: str = "temp_question.json"):
+def generate_question_json_no_answer(
+    question: str, answer_choices: dict, filename: str = "temp_question.json"
+):
     """
     Generates and saves a JSON file with a question and answer choices WITHOUT the correct answer.
     This is used during inference to avoid data leakage - the correct answer is not known.
@@ -781,7 +934,7 @@ def generate_question_json_no_answer(question: str, answer_choices: dict, filena
             "id": 1,
             "question": question,
             "answer_choices": answer_choices,
-            "correct_answer": None  # Unknown during inference
+            "correct_answer": None,  # Unknown during inference
         }
     ]
 
@@ -792,7 +945,9 @@ def generate_question_json_no_answer(question: str, answer_choices: dict, filena
     root_dir = os.path.dirname(os.path.dirname(current_file))
 
     # Construct the destination folder path
-    save_folder = os.path.join(root_dir, "MedPromptSimulate", "src", "promptbase", "datasets", "mmlu", "train")
+    save_folder = os.path.join(
+        root_dir, "MedPromptSimulate", "src", "promptbase", "datasets", "mmlu", "train"
+    )
 
     # Construct the full file path
     save_path = os.path.join(save_folder, filename)
@@ -800,6 +955,7 @@ def generate_question_json_no_answer(question: str, answer_choices: dict, filena
     # Save to JSON file
     with open(save_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
+
 
 def extract_question(patient_statement, agent_hist, parsed_responses, backend):
     # Prompt for the model
@@ -819,12 +975,13 @@ def extract_question(patient_statement, agent_hist, parsed_responses, backend):
 
     system_prompt = "You are a highly knowledgeable and precise AI assistant specializing in medical reasoning. Your role is to analyze clinical scenarios and provide accurate, evidence-based differential diagnoses. You will assess the details of each case carefully and generate insightful responses that adhere to medical best practices."
 
-    response = query_model(backend, prompt, system_prompt) # maybe do some cleaning too
+    response = query_model(backend, prompt, system_prompt)  # maybe do some cleaning too
 
     return response
-    
 
     raise Exception("Max retries exceeded: timeout")
+
+
 # Example Usage
 if __name__ == "__main__":
     agent = BAgent()
