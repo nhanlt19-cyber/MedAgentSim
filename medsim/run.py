@@ -497,11 +497,12 @@ def run_interaction_loop(
                 pi_dialogue, image_requested=imgs_requested, scenario_id=scenario_id#, thread_id=inf_id
             )
 
-        # Log and store doctor's dialogue
+        # Log and store doctor's dialogue (print giống CLI để khi gọi từ simulate thấy cùng format)
         dialogue_text = (
             f"Doctor [{int(((inf_id + 1) / total_inferences) * 100)}%]: {doctor_dialogue}"
         )
         logger.info(dialogue_text)
+        print(dialogue_text)
         dialogue_history.append({"speaker": "Doctor", "text": doctor_dialogue})
 
         # Check for diagnosis
@@ -522,6 +523,8 @@ def run_interaction_loop(
             )
             logger.info(result_text)
             logger.info(scene_text)
+            print(result_text)
+            print(scene_text)
             dialogue_history.append(
                 {
                     "DIAGNOSIS_READY_Answer": scenario.diagnosis_information(),
@@ -538,6 +541,7 @@ def run_interaction_loop(
                 f"{pi_dialogue}"
             )
             logger.info(measurement_text)
+            print(measurement_text)
             patient_agent.add_hist(pi_dialogue)
             dialogue_history.append({"speaker": "Measurement", "text": pi_dialogue})
         else:
@@ -550,6 +554,7 @@ def run_interaction_loop(
                 f"Patient [{int(((inf_id + 1) / total_inferences) * 100)}%]: {pi_dialogue}"
             )
             logger.info(patient_text)
+            print(patient_text)
             meas_agent.add_hist(pi_dialogue)
             dialogue_history.append({"speaker": "Patient", "text": pi_dialogue})
 

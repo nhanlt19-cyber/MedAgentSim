@@ -248,20 +248,28 @@ def generate_chat_v3(total_scenarios, total_correct, num_scenarios, scenario_id)
   return is_correct
 
 def agent_chat_v3(doctor_name, patient_name):
-  # Specify the path to the JSON file
+  # Báo bắt đầu hội thoại lâm sàng (log giống CLI: Doctor [X%], Patient [X%] sẽ xuất hiện bên dưới)
+  print(f"\n--- MedAgentSim clinical dialogue starting ({doctor_name} & {patient_name}) ---")
   total_scenarios, total_correct, num_scenarios, idx = extract_sim_info()
   is_correct = generate_chat_v3(total_scenarios, total_correct, num_scenarios, idx)
   update_sim_info(is_correct)
   
   current_file_dir = os.path.dirname(os.path.abspath(__file__))
   json_paths = os.path.abspath(os.path.join(current_file_dir, "../../../../..", "output"))
+  # Chọn file dialogue đúng theo scenario index (prep() ghi output/scenario_{idx}/dialogue_history.json)
+  dialogue_file = os.path.join(json_paths, f"scenario_{idx}", "dialogue_history.json")
+  if not os.path.isfile(dialogue_file):
+    json_files = sorted(glob.glob(os.path.join(json_paths, "**", "dialogue_history.json"), recursive=True))
+    dialogue_file = json_files[idx] if idx < len(json_files) else (json_files[0] if json_files else "")
   print("Output directory:", json_paths)
-  json_files = glob.glob(os.path.join(json_paths, "**", "*.json"), recursive=True)
-  print("JSON files found:", json_files)
+  print("Dialogue file used:", dialogue_file)
 
-  # Extract and print the results
-  convo = extract_speaker_text(json_files[idx], doctor_name, patient_name)
+  if not dialogue_file or not os.path.isfile(dialogue_file):
+    print("Warning: No dialogue file found; returning empty conversation.")
+    return []
+  convo = extract_speaker_text(dialogue_file, doctor_name, patient_name)
   # return [['Maria Lopez', 'Hello Klaus, how can I help you today?'], ['Klaus Mueller', "Hello Dr. Lopez, I'm not feeling well and need your help."], ['Maria Lopez', "I'm sorry to hear that. Can you please describe your symptoms to me?"], ['Klaus Mueller', "I have been experiencing a sharp pain in my tooth for the past few days and it's becoming unbearable. I think I may have a dental issue that needs to be addressed."],['Maria Lopez', 'I understand, Klaus. Let me take a look at your tooth and do an examination to determine the cause of the pain.'],['Klaus Mueller', 'Thank you for taking the time to examine my tooth, Dr. Lopez.'],['Maria Lopez', 'Let me get my equipment ready to examine your tooth. Please have a seat in the examination chair over there.'],['Klaus Mueller', 'Thank you, Dr. Lopez. I appreciate your help.'],['Maria Lopez', "Let's start by taking some X-rays of your tooth to get a better understanding of the issue."],['Klaus Mueller', "Thank you, Dr. Lopez. I'm glad we're taking steps to address my dental issue."],['Maria Lopez', 'After reviewing the X-rays, I can see that you have a cavity in your tooth. We will need to schedule a filling procedure to address the issue.'],['Maria Lopez', 'We can schedule the filling procedure for Thursday at 2 pm. Does that work for you?'],['Klaus Mueller', 'That works for me, thank you for scheduling the filling procedure on Thursday at 2pm, Dr. Lopez.'],['Maria Lopez', 'Great, I will see you on Thursday at 2 pm for the filling procedure. In the meantime, make sure to avoid any hard or sticky foods that could aggravate the cavity.'],['Klaus Mueller', 'Thank you, Dr. Lopez. I will make sure to follow your advice on avoiding hard or sticky foods.']]
+  print("--- MedAgentSim clinical dialogue complete ---\n")
   return convo
 
 # Function to load JSON from a file and extract speaker-text pairs

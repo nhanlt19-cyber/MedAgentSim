@@ -9,6 +9,8 @@ import yaml
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Type
+from urllib.request import urlopen
+from urllib.error import URLError
 
 # Configure logging
 logging.basicConfig(
@@ -165,12 +167,27 @@ def run_backend_server(target: str, stop_event: threading.Event):
         # Change back to original directory
         os.chdir(WORKING_DIR)
 
+def check_frontend_reachable(base_url: str, timeout: float = 3.0) -> bool:
+    """Return True if the frontend server is reachable (e.g. http://127.0.0.1:8000)."""
+    try:
+        urlopen(base_url, timeout=timeout)
+        return True
+    except (URLError, OSError):
+        return False
+
+
 def open_webpage(url: str, delay: int, stop_event: threading.Event):
     """Open the simulation webpage after a delay."""
     try:
         logger.info(f"Waiting {delay} seconds before opening webpage: {url}")
         time.sleep(delay)
-        
+        base_url = url.rsplit("/", 1)[0] + "/"
+        if not check_frontend_reachable(base_url):
+            logger.warning(
+                "Frontend server is not reachable at %s. "
+                "Start it first in another terminal: python -m medsim.server",
+                base_url,
+            )
         if not stop_event.is_set():
             logger.info(f"Opening webpage: {url}")
             webbrowser.open(url)
@@ -182,6 +199,11 @@ def open_webpage(url: str, delay: int, stop_event: threading.Event):
 def run_scenarios(num_scenarios: int, delay: int = 5):
     """Run multiple clinical scenarios in sequence."""
     try:
+        if not check_frontend_reachable("http://127.0.0.1:8000/"):
+            logger.warning(
+                "Frontend not reachable at http://127.0.0.1:8000/. "
+                "Start it first: python -m medsim.server (keep it running)."
+            )
         # Initialize counters
         total_scenarios = 0
         total_correct = 0

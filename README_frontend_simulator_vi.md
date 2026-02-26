@@ -223,7 +223,15 @@ Bạn có thể chỉnh `num_scenarios` trong `config_sim.yaml` để chạy nhi
 
 ---
 
-## 7. Một số lỗi thường gặp và cách xử lý nhanh
+## 7. Đồng bộ frontend – backend và khi nào chat cập nhật
+
+- **Thứ tự chạy bắt buộc**: Luôn chạy **Terminal 1** (`python -m medsim.server`) trước, mở trình duyệt tới `http://.../simulator_home` và **giữ tab mở**. Sau đó mới chạy **Terminal 2** (`python -m medsim.simulate`). Nếu frontend chưa chạy, `medsim.simulate` sẽ ghi log cảnh báo.
+- **Khi nào khung "Current Conversation" có nội dung**: Nội dung chat là hội thoại **Doctor ↔ Patient** do MedAgentSim sinh ra. Nó **chỉ xuất hiện** khi hai nhân vật (bác sĩ **Maria Lopez** và bệnh nhân **Klaus Mueller**) **cùng vị trí** trong bệnh viện và Reverie gọi pipeline MedAgentSim (LLM); có thể mất **vài chục giây đến vài phút** (tùy model Ollama). Trước khi gặp nhau, khung chat có thể hiển thị *"None at the moment"*.
+- **Demo video**: Demo (bản đồ 2D + nhân vật di chuyển + chat) tương ứng luồng hiện tại: Reverie điều khiển di chuyển, khi bác sĩ và bệnh nhân gặp nhau thì chat được sinh và hiển thị. Nếu chat không đổi, đợi nhân vật gặp nhau và đảm bảo frontend server đang chạy, tab đang mở.
+
+---
+
+## 8. Một số lỗi thường gặp và cách xử lý nhanh
 
 - **Không vào được `/simulator_home`**:
   - Kiểm tra `python -m medsim.server` có log “Server started successfully” không.
@@ -234,7 +242,11 @@ Bạn có thể chỉnh `num_scenarios` trong `config_sim.yaml` để chạy nhi
 
 - **Không thấy bác sĩ/bệnh nhân di chuyển, chỉ thấy map trống**:
   - Đảm bảo Reverie đang chạy (check log trong thư mục `logs/` và terminal chạy `python -m medsim.simulate`).
-  - Đảm bảo URL trong frontend đúng (`/simulator_home`).
+  - Đảm bảo **frontend đã chạy trước** và tab `simulator_home` đang mở (frontend nhận bước từ backend qua API).
+
+- **Khung chat không đổi, luôn "None at the moment"**:
+  - Đợi cho Maria Lopez và Klaus Mueller di chuyển đến **cùng một ô** (gặp nhau) trong bệnh viện; khi đó Reverie mới gọi MedAgentSim và cập nhật chat.
+  - Kiểm tra log Reverie có in "Output directory", "Dialogue file used" và không có lỗi khi gọi LLM.
 
 - **Internal discussion không xuất hiện**:
   - Có thể số lượt hỏi (`total_inferences`) quá thấp, bác sĩ kết thúc sớm trước khi tới `internal_discussion`.
@@ -242,7 +254,7 @@ Bạn có thể chỉnh `num_scenarios` trong `config_sim.yaml` để chạy nhi
 
 ---
 
-## 8. Liên hệ với các README khác
+## 9. Liên hệ với các README khác
 
 - **Giải thích chi tiết code và kiến trúc**: xem `README_medagentsim_chi_tiet.md`.
 - **Chạy CLI với Ollama trên server (không frontend)**: xem `README_huong_dan_server_local_ollama.md`.

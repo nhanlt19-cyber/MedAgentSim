@@ -434,6 +434,37 @@ os.makedirs(fs_temp_storage, exist_ok=True)
 
 ---
 
+### 1.10. `medsim/simulate/__main__.py` – kiểm tra frontend có chạy trước khi simulate
+
+**Mục đích:** Tránh chạy `python -m medsim.simulate` khi chưa start frontend, dẫn tới trang không nhận bước và chat không cập nhật.
+
+**Thay đổi:** Thêm `check_frontend_reachable(base_url)` (dùng `urllib.request.urlopen`); gọi kiểm tra khi bắt đầu `run_scenarios` và trong `open_webpage` (sau delay). Nếu không kết nối được tới `http://127.0.0.1:8000/` thì ghi log cảnh báo nhắc chạy `python -m medsim.server` trước.
+
+---
+
+### 1.11. Reverie `converse.py` – chọn file dialogue theo scenario index
+
+**Mục đích:** `agent_chat_v3` đọc hội thoại từ `output/scenario_{idx}/dialogue_history.json` do `prep()` ghi. Trước đây dùng `json_files[idx]` với glob, thứ tự file không đảm bảo đúng scenario.
+
+**File đã sửa:** `Simulacra/reverie/backend_server/persona/cognitive_modules/converse.py`
+
+**Thay đổi:** Ưu tiên đường dẫn `output/scenario_{idx}/dialogue_history.json`; nếu không tồn tại thì fallback sang danh sách `dialogue_history.json` đã sort và chọn theo index. Nếu không có file nào thì trả về `[]` và in cảnh báo.
+
+---
+
+### 1.12. Log giống CLI khi chạy simulate (Doctor [X%], Patient [X%])
+
+**Mục đích:** Khi chạy `python -m medsim.simulate`, log chủ yếu là Reverie (GNS FUNCTION, action_location_sector, …). Phần hội thoại lâm sàng MedAgentSim (gọi qua `prep()` khi Maria & Klaus gặp nhau) dùng `medsim/run.py` với `logger.info()`, nên format khác CLI. Để log khi simulate giống CLI (có dòng Doctor [X%], Patient [X%], Correct answer, Scene …), thêm `print()` cho các dòng tiến trình trong `run.py` và thêm dòng báo bắt đầu/kết thúc trong `converse.py`.
+
+**File đã sửa:**
+
+- `medsim/run.py`: Với mỗi dòng `logger.info(dialogue_text)` / `logger.info(measurement_text)` / `logger.info(patient_text)` và với `result_text` / `scene_text` (kết quả chẩn đoán), thêm `print(...)` tương ứng.
+- `Simulacra/.../persona/cognitive_modules/converse.py`: Trước khi gọi `generate_chat_v3` in `--- MedAgentSim clinical dialogue starting (Maria Lopez & Klaus Mueller) ---`; sau khi lấy xong `convo` in `--- MedAgentSim clinical dialogue complete ---`.
+
+**Ảnh hưởng:** Khi hai nhân vật gặp nhau trong simulate, trong log sẽ thấy cùng kiểu dòng như CLI: Doctor [10%]: …, Patient [20%]: …, Correct answer: …, Scene 0, The diagnosis was CORRECT/INCORRECT (…%).
+
+---
+
 ## 2. Các README mới/bổ sung (tài liệu, không ảnh hưởng code)
 
 Các file README này **chỉ là tài liệu tham khảo**, không làm thay đổi hành vi chạy của chương trình.
