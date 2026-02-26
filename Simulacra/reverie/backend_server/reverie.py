@@ -58,7 +58,9 @@ class ReverieServer:
                sim_code):
     
     print ("(reverie): Temp storage: ", fs_temp_storage)
-        
+    # Đảm bảo thư mục temp_storage tồn tại (tránh FileNotFoundError khi ghi curr_sim_code.json)
+    os.makedirs(fs_temp_storage, exist_ok=True)
+
     # FORKING FROM A PRIOR SIMULATION:
     # <fork_sim_code> indicates the simulation we are forking from. 
     # Interestingly, all simulations must be forked from some initial 

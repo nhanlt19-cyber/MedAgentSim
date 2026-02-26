@@ -410,6 +410,30 @@ ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '10.0.12.81']
 
 ---
 
+### 1.9. Reverie backend – tạo thư mục `temp_storage` trước khi ghi file
+
+**Mục đích:**
+
+Khi chạy `python -m medsim.simulate`, backend Reverie (`reverie.py`) ghi `curr_sim_code.json` và `curr_step.json` vào `../../environment/frontend_server/temp_storage`. Thư mục `temp_storage` mặc định không có trong repo, dẫn đến **FileNotFoundError**.
+
+**File đã sửa:**
+
+- `Simulacra/reverie/backend_server/reverie.py`
+
+**Thay đổi:**
+
+Trong `ReverieServer.__init__`, ngay sau dòng in `fs_temp_storage`, thêm:
+
+```python
+os.makedirs(fs_temp_storage, exist_ok=True)
+```
+
+**Ảnh hưởng:**
+
+- Thư mục `temp_storage` được tạo tự động (tương đối so với cwd `Simulacra/reverie/backend_server`) trước khi ghi file, nên không còn lỗi khi chạy simulate.
+
+---
+
 ## 2. Các README mới/bổ sung (tài liệu, không ảnh hưởng code)
 
 Các file README này **chỉ là tài liệu tham khảo**, không làm thay đổi hành vi chạy của chương trình.
