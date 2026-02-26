@@ -223,7 +223,44 @@ Bạn có thể chỉnh `num_scenarios` trong `config_sim.yaml` để chạy nhi
 
 ---
 
-## 7. Đồng bộ frontend – backend và khi nào chat cập nhật
+## 7. Vì sao CLI rất nhanh còn chạy với frontend rất lâu (và chưa thấy doctor–patient gặp nhau)
+
+### 7.1. CLI chỉ chạy vòng hội thoại
+
+- **CLI** (`python medsim/main.py` hoặc qua `medsim/run.py`): Chỉ chạy **một kịch bản lâm sàng** (một bệnh nhân + bác sĩ). Luồng là: load scenario → vòng lặp **Doctor hỏi → Patient/Measurement trả lời** (mỗi vòng 1–2 lần gọi LLM). Với `total_inferences=10` bạn có khoảng **10–20 lần gọi LLM** rồi kết thúc. Không có bản đồ 2D, không di chuyển nhân vật. Vì vậy CLI thường **xong trong vài phút** (tùy tốc độ Ollama).
+
+### 7.2. Frontend chạy cả thế giới 2D (Reverie) trước khi có hội thoại
+
+- **Simulate** (`python -m medsim.simulate`): Chạy **Reverie** – mô phỏng thế giới 2D (bệnh viện, bản đồ The Ville). Hai nhân vật **Maria Lopez** (bác sĩ) và **Klaus Mueller** (bệnh nhân) phải **tự di chuyển** từ vị trí xuất phát đến **cùng một ô** (cùng phòng) thì Reverie mới gọi MedAgentSim và mới có đoạn hội thoại Doctor ↔ Patient mà bạn thấy trên CLI.
+
+- **Mỗi bước (step) của Reverie** = một “nhịp” thế giới: frontend gửi vị trí hiện tại → Reverie **cho từng nhân vật** gọi LLM nhiều lần để quyết định:
+  - **Khu vực** (sector): ví dụ Hospital / Outdoors → `generate_action_sector`
+  - **Phòng cụ thể** (arena): ví dụ Internal Medicine Consultation Room → `generate_action_arena`
+  - **Vật thể/điểm đến** (game object) → `generate_action_game_object`
+  - **Emoji mô tả hành động** → `generate_action_pronunciatio`
+  - **Event triple** (s, p, o) → `generate_action_event_triple`  
+  → Mỗi nhân vật mỗi step thường **5–7 lần gọi LLM**. Hai nhân vật ⇒ **khoảng 10–14 lần gọi LLM cho mỗi step**.
+
+- **Kịch bản mặc định** (fork `test-simulation`): Ở step 5, Maria và Klaus ở **hai vị trí khác nhau** (ví dụ Maria ở (43,26), Klaus ở (60,75)). Để họ **cùng một ô** (cùng phòng khám), Reverie phải chạy **nhiều step nữa** (có thể 20–50–100+ step tùy bản đồ và đường đi).  
+  → **Tổng số lần gọi LLM trước khi gặp nhau** = (số step) × (10–14) ≈ **vài trăm đến hơn một nghìn lần**, sau đó mới thêm 10–20 lần cho đoạn hội thoại lâm sàng. Vì vậy chạy với frontend **rất lâu** so với CLI và có thể **rất lâu mới đến đoạn doctor–patient trao đổi**.
+
+### 7.3. Tóm tắt so sánh
+
+|        | CLI | Frontend (simulate) |
+|--------|-----|----------------------|
+| Nội dung chạy | Chỉ vòng Doctor ↔ Patient (1 scenario) | Reverie 2D (di chuyển) + khi gặp nhau mới chạy Doctor ↔ Patient |
+| Số lần gọi LLM đến khi có hội thoại | ~10–20 | (số step × 10–14) + 10–20; số step có thể 20–100+ |
+| Thời gian điển hình | Vài phút | Nhiều chục phút đến hàng giờ (tùy model và số step) |
+
+### 7.4. Cách làm nhanh hơn nếu chỉ cần test hội thoại
+
+- **Cách 1 – Chỉ test hội thoại**: Dùng CLI (`python medsim/main.py` với các tham số phù hợp) để test nhanh phần Doctor/Patient/Measurement và diagnosis, không cần frontend.
+- **Cách 2 – Giảm số step tối đa khi chạy frontend**: Trong `Simulacra/reverie/backend_server/reverie.py`, lệnh `toq` gọi `self.start_server(5000)` (tối đa 5000 step). Có thể tạm đổi thành `self.start_server(50)` hoặc `100` để Reverie dừng sớm hơn (khi đó có thể chưa kịp gặp nhau, chỉ để xem log/flow).
+- **Cách 3 – Fork có sẵn hai nhân vật cùng phòng**: Tạo (hoặc chỉnh) fork trong `storage/` sao cho ở step 0/1 Maria và Klaus đã ở **cùng tọa độ (x,y)** (cùng phòng). Khi đó Reverie sẽ gần như ngay lập tức vào `generate_convo` và gọi MedAgentSim, bạn thấy đoạn doctor–patient trao đổi sớm hơn nhiều (sau vài step đầu).
+
+---
+
+## 8. Đồng bộ frontend – backend và khi nào chat cập nhật
 
 - **Thứ tự chạy bắt buộc**: Luôn chạy **Terminal 1** (`python -m medsim.server`) trước, mở trình duyệt tới `http://.../simulator_home` và **giữ tab mở**. Sau đó mới chạy **Terminal 2** (`python -m medsim.simulate`). Nếu frontend chưa chạy, `medsim.simulate` sẽ ghi log cảnh báo.
 - **Khi nào khung "Current Conversation" có nội dung**: Nội dung chat là hội thoại **Doctor ↔ Patient** do MedAgentSim sinh ra. Nó **chỉ xuất hiện** khi hai nhân vật (bác sĩ **Maria Lopez** và bệnh nhân **Klaus Mueller**) **cùng vị trí** trong bệnh viện và Reverie gọi pipeline MedAgentSim (LLM); có thể mất **vài chục giây đến vài phút** (tùy model Ollama). Trước khi gặp nhau, khung chat có thể hiển thị *"None at the moment"*.
@@ -231,7 +268,7 @@ Bạn có thể chỉnh `num_scenarios` trong `config_sim.yaml` để chạy nhi
 
 ---
 
-## 8. Một số lỗi thường gặp và cách xử lý nhanh
+## 9. Một số lỗi thường gặp và cách xử lý nhanh
 
 - **Không vào được `/simulator_home`**:
   - Kiểm tra `python -m medsim.server` có log “Server started successfully” không.
@@ -254,7 +291,7 @@ Bạn có thể chỉnh `num_scenarios` trong `config_sim.yaml` để chạy nhi
 
 ---
 
-## 9. Liên hệ với các README khác
+## 10. Liên hệ với các README khác
 
 - **Giải thích chi tiết code và kiến trúc**: xem `README_medagentsim_chi_tiet.md`.
 - **Chạy CLI với Ollama trên server (không frontend)**: xem `README_huong_dan_server_local_ollama.md`.
