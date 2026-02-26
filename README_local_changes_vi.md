@@ -465,6 +465,34 @@ os.makedirs(fs_temp_storage, exist_ok=True)
 
 ---
 
+### 1.13. Reverie đẩy hội thoại Doctor–Patient ra frontend (trường `chat`)
+
+**Mục đích:** Trước đây, dù MedAgentSim đã sinh đầy đủ hội thoại (lưu ở `output/scenario_0/dialogue_history.json`), frontend vẫn luôn hiển thị **“Current Conversation: None at the moment”** vì Reverie không gán hội thoại vào `scratch.chat`, dẫn tới các file `movement/<step>.json` có `"chat": null`. Template `home/main_script.html` chỉ đọc trường `chat` này nên không có gì để hiển thị.
+
+**File đã sửa:**  
+`Simulacra/reverie/backend_server/persona/cognitive_modules/plan.py`
+
+**Thay đổi chính (trong hàm `_chat_react`)** – ngay sau khi gọi `generate_convo`:
+
+```python
+convo, duration_min = generate_convo(maze, init_persona, target_persona)
+# Gán hội thoại vào scratch.chat để frontend có thể hiển thị ngay
+init_persona.scratch.chat = convo
+target_persona.scratch.chat = convo
+```
+
+Phần còn lại của `_chat_react` giữ nguyên (tạo `inserted_act`, cập nhật schedule và gọi `_create_react`).
+
+**Ảnh hưởng:**
+
+- Khi điều kiện chat thỏa (Maria Lopez và Klaus Mueller gặp nhau), Reverie:
+  - Gọi pipeline MedAgentSim (NEJM / MedQA…) qua `generate_convo` → `agent_chat_v3` → `prep`.
+  - Nhận `convo` dạng `[[speaker, text], ...]` và lưu ngay vào `scratch.chat` cho cả hai persona.
+  - Bước ghi `movement/<step>.json` sau đó đặt `"chat": [...]` thay vì `null`.
+- Frontend (`home/main_script.html`) đọc trường `chat` và hiển thị đầy đủ đoạn hội thoại dưới **Current Conversation** cho Klaus Mueller và Maria Lopez (thay vì “None at the moment”), đúng với mong muốn chạy 1 kịch bản có frontend.
+
+---
+
 ## 2. Các README mới/bổ sung (tài liệu, không ảnh hưởng code)
 
 Các file README này **chỉ là tài liệu tham khảo**, không làm thay đổi hành vi chạy của chương trình.
