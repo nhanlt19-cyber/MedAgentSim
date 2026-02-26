@@ -260,7 +260,8 @@ def main():
         logger.info(f"Running {num_scenarios} scenarios (out of {total_available} available)")
         
         # Run the simulation
-        run_scenarios(10)  # Currently hardcoded to 1 scenario
+        # Sử dụng đúng số scenario từ config (không hard-code)
+        run_scenarios(num_scenarios)
         
     except Exception as e:
         logger.error(f"Simulation failed: {e}")

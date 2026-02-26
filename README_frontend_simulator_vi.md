@@ -1,0 +1,252 @@
+## Hướng dẫn chạy MedAgentSim với giao diện frontend (bản demo bệnh viện 2D)
+
+File này hướng dẫn bạn chạy **full demo MedAgentSim** với:
+
+- Môi trường bệnh viện 2D (Phaser + Django) giống video demo.
+- Bác sĩ và bệnh nhân di chuyển trong bệnh viện.
+- Khung chat hiển thị hội thoại **Doctor ↔ Patient** và phần **thảo luận nội bộ giữa 5 bác sĩ** (internal_discussion).
+
+Giả định môi trường:
+
+- Server Ubuntu 24.04.3 LTS (32 vCPU, 32GB RAM) – đã cài đặt Python/conda như trong các README trước.
+- Bạn đã cấu hình backend LLM (Ollama `llama3.2:3b` hoặc model khác) theo `README_huong_dan_server_local_ollama.md` và đã chạy được CLI `medsim/main.py`.
+
+---
+
+## 1. Kiến trúc tổng thể khi chạy có frontend
+
+Khi chạy full demo, có **3 tiến trình chính**:
+
+1. **Frontend (Django + Phaser)** – hiển thị bệnh viện 2D và khung hội thoại.
+   - Entry: `python -m medsim.server`
+   - Mã: `medsim/server/__main__.py` → `Simulacra/environment/frontend_server/manage.py`.
+   - URL: `http://127.0.0.1:8000/simulator_home`.
+
+2. **Backend môi trường (Reverie)** – điều khiển chuyển động nhân vật, đồng bộ trạng thái game với LLM.
+   - Được gọi bởi `medsim/simulate`.
+   - Mã: `Simulacra/reverie/backend_server/reverie.py`.
+
+3. **Controller chạy nhiều scenario** – đọc config, gọi Reverie + mở trình duyệt, log kết quả.
+   - Entry: `python -m medsim.simulate`
+   - Mã: `medsim/simulate/__main__.py`.
+   - Đọc `[project_root]/medsim/configs/config_sim.yaml` để biết dataset, số scenario, model alias,…
+
+Luồng điển hình:
+
+- Bạn mở browser tới `/simulator_home` (giữ tab này mở).
+- `medsim.simulate` lần lượt gọi `reverie.py` cho từng scenario (`scenario-0`, `scenario-1`, …).
+- Reverie sử dụng kiến trúc MedAgentSim (trong đó có **5 bác sĩ + 1 bệnh nhân + measurement**) để sinh hội thoại.
+- Frontend nhận các update vị trí + message và hiển thị trên map + khung chat.
+
+---
+
+## 2. Chuẩn bị trước khi chạy frontend
+
+### 2.1. Kiểm tra lại environment
+
+Trong thư mục `MedAgentSim`:
+
+```bash
+conda activate mgent
+
+# Đảm bảo đã cài ở chế độ editable sau các chỉnh sửa gần đây
+pip install -e .
+```
+
+### 2.2. Kiểm tra cấu trúc thư mục
+
+Đảm bảo bạn có đủ các thư mục sau (tên in hoa đúng chính tả):
+
+- `Simulacra/environment/frontend_server` – chứa `manage.py` (Django + assets Phaser).
+- `Simulacra/reverie/backend_server` – chứa `reverie.py` và `simulation_controller.json`.
+- `medsim/` – chứa `server/`, `simulate/`, `core/`, `configs/`.
+
+Nếu bạn clone repo gốc, các thư mục này sẽ có sẵn.
+
+### 2.3. Cấu hình `config_sim.yaml`
+
+Mở file `medsim/configs/config_sim.yaml` và chỉnh cho phù hợp. Ví dụ tối giản (đã điều chỉnh theo setup chạy Ollama tại chỗ):
+
+```yaml
+api_keys:
+  openai: ""         # có thể để rỗng nếu không dùng OpenAI
+  replicate: ""
+  anthropic: ""
+
+inference:
+  type: "llm"        # llm / human_doctor / human_patient
+
+biases:
+  doctor: "None"
+  patient: "None"
+
+language_models:
+  doctor: "ollama"   # alias logic, sẽ map sang backend tương ứng
+  patient: "ollama"
+  measurement: "ollama"
+  moderator: "ollama"
+
+scenario:
+  dataset: "MedQA"   # MedQA, MedQA_Ext, NEJM, NEJM_Ext, MIMICIV
+  image_request: false
+  num_scenarios: 1   # chạy trước 1 scenario để test
+  total_inferences: 10
+```
+
+Lưu ý:
+
+- Cách `medsim/simulate` gọi LLM có thể khác `medsim/main.py`, nhưng về ý tưởng vẫn là alias → model thực.
+- Để đồng bộ với setup Ollama, bạn nên dùng cùng một alias (vd. `"ollama"`) và ánh xạ tại nơi `resolve_model_name`/`BAgent` được sử dụng.
+
+---
+
+## 3. Bước 1 – Chạy frontend (Django + Phaser)
+
+Trên server (hoặc máy dev) trong thư mục `MedAgentSim`:
+
+```bash
+conda activate mgent
+
+python -m medsim.server
+```
+
+Nếu thành công, log sẽ hiển thị dạng:
+
+```text
+INFO Frontend-Server Running frontend server on port 8000
+INFO Frontend-Server Executing command: ... runserver 0.0.0.0:8000
+INFO Frontend-Server Server started successfully on port 8000
+INFO Frontend-Server Server URL (local): http://127.0.0.1:8000/
+INFO Frontend-Server Server URL (external): http://<server-ip>:8000/ (vd. http://10.0.12.81:8000/simulator_home)
+```
+
+Frontend đã được cấu hình **bind lên `0.0.0.0:8000`**, nên có thể truy cập từ bên ngoài qua IP server.
+
+Sau đó:
+
+- Từ máy của bạn (có trình duyệt), truy cập:  
+  - Nếu bạn duyệt **ngay trên server**: `http://127.0.0.1:8000/simulator_home`
+  - Nếu duyệt **từ máy khác trong mạng** (vd. server có IP `10.0.12.81`): `http://10.0.12.81:8000/simulator_home`
+- Giữ tab này mở trong suốt quá trình mô phỏng (để Phaser chạy, nhận event).
+
+Nếu có lỗi:
+
+- Kiểm tra lại đường dẫn `Simulacra/environment/frontend_server` có tồn tại không.
+- Cài đặt phụ thuộc Django nếu thiếu (theo README gốc, ví dụ `pip install django==2.2`).
+
+---
+
+## 4. Bước 2 – Chạy controller mô phỏng (`medsim.simulate`)
+
+Mở **một terminal khác** (terminal 1 giữ lệnh `medsim.server` đang chạy), vẫn trong thư mục `MedAgentSim`:
+
+```bash
+conda activate mgent
+
+python -m medsim.simulate
+```
+
+Những gì xảy ra bên trong (theo `medsim/simulate/__main__.py`):
+
+1. Đọc `config_sim.yaml`:
+   - Lấy dataset (`MedQA`) và `num_scenarios` (ví dụ = 1).
+2. Khởi tạo loader tương ứng (MedQA / NEJM / MIMICIV).
+3. Ghi lại trạng thái vào `Simulacra/reverie/backend_server/simulation_controller.json`:
+   - `simulation_index`, `total_scenarios`, `total_correct`, …
+4. Cho mỗi scenario `i` (0 … `num_scenarios - 1`):
+   - Gọi `reverie.py` với:
+
+```bash
+python reverie.py --origin "test-simulation" --target "scenario-i" --command "toq"
+```
+
+   - Đồng thời, sau 1 khoảng `delay` (mặc định 5s), tự mở trình duyệt tới `http://127.0.0.1:8000/simulator_home` (nếu chạy trên máy có GUI).
+   - Ghi toàn bộ log backend vào file `logs/scenario-i_YYYY-MM-DD_HH-MM-SS.txt`.
+
+Trên giao diện, bạn sẽ thấy:
+
+- Nhân vật bác sĩ và bệnh nhân di chuyển đến phòng khám.
+- Khung chat (bên cạnh/game UI) hiển thị:
+  - Câu hỏi của bác sĩ.
+  - Câu trả lời của bệnh nhân.
+  - Kết quả measurement (nếu có `REQUEST TEST`).
+  - Phần thảo luận nội bộ (các dòng `"Doctor 1: ..."`, `"Doctor 2: ..."`) khi đến giai đoạn `internal_discussion`.
+
+---
+
+## 5. Đảm bảo internal_discussion vẫn hoạt động
+
+Phần thảo luận giữa 5 bác sĩ nằm trong `medsim/core/agent.py` – class `DoctorAgent.internal_discussion`.  
+Khi dùng frontend:
+
+- Reverie và MedAgentSim vẫn gọi `DoctorAgent.inference_doctor(...)` giống CLI.
+- Điều kiện chuyển sang `internal_discussion` là:
+
+```python
+if self.infs >= self.MAX_INFS - 1:
+    return self.internal_discussion(question)
+```
+
+Vì vậy, để chắc chắn thấy phần internal discussion xuất hiện trong giao diện:
+
+- Đặt `total_inferences` trong `config_sim.yaml` đủ lớn (ví dụ 10–15) để bác sĩ có thời gian hỏi bệnh rồi mới vào giai đoạn thảo luận.
+
+---
+
+## 6. Gợi ý bộ lệnh hoàn chỉnh (tóm tắt)
+
+Giả sử bạn đã cấu hình Ollama + `llama3.2:3b` và `config_sim.yaml` như trên.
+
+### Terminal 1 – Frontend
+
+```bash
+cd ~/MedAgentSim
+conda activate mgent
+python -m medsim.server
+```
+
+Giữ terminal này mở.
+
+### Browser
+
+- Truy cập: `http://<IP_server>:8000/simulator_home`
+
+### Terminal 2 – Backend + Controller
+
+```bash
+cd ~/MedAgentSim
+conda activate mgent
+python -m medsim.simulate
+```
+
+Bạn có thể chỉnh `num_scenarios` trong `config_sim.yaml` để chạy nhiều ca, nhưng nên bắt đầu với `1` cho dễ debug.
+
+---
+
+## 7. Một số lỗi thường gặp và cách xử lý nhanh
+
+- **Không vào được `/simulator_home`**:
+  - Kiểm tra `python -m medsim.server` có log “Server started successfully” không.
+  - Kiểm tra firewall / port 8000 đã mở (nếu truy cập từ ngoài).
+
+- **`medsim.simulate` báo lỗi dataset**:
+  - Đảm bảo các file dataset (`_medqa.jsonl`, `_medqa_extended.jsonl`, …) có ở thư mục `datasets/` như code trong `ScenarioLoader*` yêu cầu.
+
+- **Không thấy bác sĩ/bệnh nhân di chuyển, chỉ thấy map trống**:
+  - Đảm bảo Reverie đang chạy (check log trong thư mục `logs/` và terminal chạy `python -m medsim.simulate`).
+  - Đảm bảo URL trong frontend đúng (`/simulator_home`).
+
+- **Internal discussion không xuất hiện**:
+  - Có thể số lượt hỏi (`total_inferences`) quá thấp, bác sĩ kết thúc sớm trước khi tới `internal_discussion`.
+  - Tăng `total_inferences` trong `config_sim.yaml` (ví dụ lên 15 hoặc 20) và chạy lại.
+
+---
+
+## 8. Liên hệ với các README khác
+
+- **Giải thích chi tiết code và kiến trúc**: xem `README_medagentsim_chi_tiet.md`.
+- **Chạy CLI với Ollama trên server (không frontend)**: xem `README_huong_dan_server_local_ollama.md`.
+- **Ghi chú toàn bộ thay đổi local** (để dễ merge với repo gốc): xem `README_local_changes_vi.md`.
+
+File hiện tại (`README_frontend_simulator_vi.md`) tập trung **riêng** cho kịch bản chạy **có frontend** giống demo gốc của MedAgentSim.
+

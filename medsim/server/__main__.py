@@ -65,8 +65,9 @@ def run_frontend_server(port=None):
             logger.error(f"manage.py not found at {manage_py_path}")
             return False
             
-        # Form command with proper string representation of path
-        command = f'python3 "{manage_py_path}" runserver {port}'
+        # Bind to 0.0.0.0 để cho phép truy cập từ ngoài qua IP server (vd. http://10.0.12.81:8000)
+        bind_address = "0.0.0.0"
+        command = f'python3 "{manage_py_path}" runserver {bind_address}:{port}'
         logger.info(f"Executing command: {command}")
         
         # Run the command with proper error handling
@@ -94,7 +95,8 @@ def run_frontend_server(port=None):
             return False
         else:
             logger.info(f"Server started successfully on port {port}")
-            logger.info(f"Server URL: http://127.0.0.1:{port}/")
+            logger.info(f"Server URL (local): http://127.0.0.1:{port}/")
+            logger.info(f"Server URL (external): http://<server-ip>:{port}/ (vd. http://10.0.12.81:{port}/simulator_home)")
             return True
             
     except Exception as e:

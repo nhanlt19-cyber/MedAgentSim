@@ -237,6 +237,148 @@ python medsim/main.py --inf_type llm --doctor_llm ollama ... \
 
 ---
 
+### 1.5. `medsim/simulate/__main__.py` – dùng `num_scenarios` trong config, bỏ hard-code 10
+
+**Mục đích:**
+
+Khi chạy frontend bằng `python -m medsim.simulate`, code gốc luôn gọi `run_scenarios(10)` bất kể `num_scenarios` trong `config_sim.yaml`. Điều này gây khó debug khi bạn chỉ muốn chạy 1 scenario để test giao diện.
+
+**Trước khi chỉnh:**
+
+```python
+# Determine number of scenarios
+configured_num = config["scenario"]["num_scenarios"]
+...
+num_scenarios = configured_num or total_available
+...
+# Run the simulation
+run_scenarios(10)  # Currently hardcoded to 1 scenario
+```
+
+**Sau khi chỉnh:**
+
+```python
+# Determine number of scenarios
+configured_num = config["scenario"]["num_scenarios"]
+...
+num_scenarios = configured_num or total_available
+...
+# Run the simulation
+# Sử dụng đúng số scenario từ config (không hard-code)
+run_scenarios(num_scenarios)
+```
+
+**Ảnh hưởng:**
+
+- Khi bạn đặt `scenario.num_scenarios: 1` trong `config_sim.yaml`, `medsim.simulate` sẽ chỉ chạy đúng 1 scenario qua Reverie + frontend.
+- Dễ kiểm soát số ca chạy khi test UI.
+
+---
+
+### 1.6. `medsim/configs/config_sim.yaml` – điều chỉnh cho môi trường server local + Ollama
+
+**Mục đích:**
+
+- Không phụ thuộc vào API key OpenAI/Replicate/Anthropic khi đang dùng Ollama local.
+- Đặt alias model là `"ollama"` để thống nhất với phần CLI.
+- Giảm `num_scenarios` và `total_inferences` mặc định để dễ test.
+
+**Trước khi chỉnh (rút gọn):**
+
+```yaml
+api_keys:
+  openai: "sk-your-openai-api-key"
+  replicate: "your-replicate-api-key"
+  anthropic: "your-anthropic-api-key"  # Optional
+...
+language_models:
+  doctor: "meta-llama/Llama-3.3-70B-Instruct"
+  patient: "meta-llama/Llama-3.3-70B-Instruct"
+  measurement: "meta-llama/Llama-3.3-70B-Instruct"
+  moderator: "meta-llama/Llama-3.3-70B-Instruct"
+...
+scenario:
+  dataset: "MedQA"
+  image_request: false
+  num_scenarios: null
+  total_inferences: 20
+```
+
+**Sau khi chỉnh:**
+
+```yaml
+api_keys:
+  openai: ""        # để trống nếu không dùng OpenAI trực tiếp
+  replicate: ""
+  anthropic: ""      # Optional
+
+inference:
+  type: "llm"
+
+biases:
+  doctor: "None"
+  patient: "None"
+
+language_models:
+  doctor: "ollama"      # alias logic, backend thật do BAgent quyết định
+  patient: "ollama"
+  measurement: "ollama"
+  moderator: "ollama"
+
+scenario:
+  dataset: "MedQA"  # Options: MedQA, MedQA_Ext, NEJM, NEJM_Ext, MIMICIV
+  image_request: false
+  num_scenarios: 1    # chạy 1 scenario để test với frontend
+  total_inferences: 10
+```
+
+**Ảnh hưởng:**
+
+- `medsim.simulate` đọc đúng số scenario (`1`) và số lượt inference (`10`) khi chạy demo UI.
+- Bạn không cần cung cấp API key bên ngoài khi đang dùng backend Ollama local.
+- Tài liệu frontend (`README_frontend_simulator_vi.md`) khớp hoàn toàn với cấu hình thực tế.
+
+---
+
+### 1.7. `medsim/server/__main__.py` – bind frontend lên `0.0.0.0` để truy cập từ ngoài qua IP server
+
+**Mục đích:**
+
+Mặc định Django `runserver` chỉ lắng nghe trên `127.0.0.1`, nên chỉ máy local mới truy cập được. Khi chạy frontend trên server (vd. IP `10.0.12.81`), cần bind lên `0.0.0.0` để trình duyệt từ máy khác có thể mở `http://10.0.12.81:8000/simulator_home`.
+
+**Trước khi chỉnh:**
+
+```python
+# Form command with proper string representation of path
+command = f'python3 "{manage_py_path}" runserver {port}'
+logger.info(f"Executing command: {command}")
+...
+logger.info(f"Server URL: http://127.0.0.1:{port}/")
+```
+
+(Django mặc định dùng `127.0.0.1` khi chỉ truyền `port`.)
+
+**Sau khi chỉnh:**
+
+```python
+# Bind to 0.0.0.0 để cho phép truy cập từ ngoài qua IP server (vd. http://10.0.12.81:8000)
+bind_address = "0.0.0.0"
+command = f'python3 "{manage_py_path}" runserver {bind_address}:{port}'
+logger.info(f"Executing command: {command}")
+...
+logger.info(f"Server URL (local): http://127.0.0.1:{port}/")
+logger.info(f"Server URL (external): http://<server-ip>:{port}/ (vd. http://10.0.12.81:{port}/simulator_home)")
+```
+
+**Ảnh hưởng:**
+
+- Frontend lắng nghe trên **mọi interface** (`0.0.0.0:8000`).
+- Truy cập từ máy khác trong mạng: `http://10.0.12.81:8000/simulator_home`.
+- Vẫn truy cập được từ chính server: `http://127.0.0.1:8000/simulator_home`.
+- **Lưu ý bảo mật:** Chỉ dùng trong mạng nội bộ hoặc sau khi cấu hình firewall; không expose trực tiếp ra internet mà không bảo vệ.
+
+---
+
 ## 2. Các README mới/bổ sung (tài liệu, không ảnh hưởng code)
 
 Các file README này **chỉ là tài liệu tham khảo**, không làm thay đổi hành vi chạy của chương trình.
