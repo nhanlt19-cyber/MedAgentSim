@@ -379,6 +379,37 @@ logger.info(f"Server URL (external): http://<server-ip>:{port}/ (vd. http://10.0
 
 ---
 
+### 1.8. Django `ALLOWED_HOSTS` – cho phép truy cập frontend qua IP server (10.0.12.81)
+
+**Mục đích:**
+
+Khi truy cập `http://10.0.12.81:8000/simulator_home`, Django trả lỗi **DisallowedHost** vì mặc định `ALLOWED_HOSTS = []`. Cần thêm host (IP hoặc tên miền) vào `ALLOWED_HOSTS` để Django chấp nhận request từ đó.
+
+**File đã sửa:**
+
+- `Simulacra/environment/frontend_server/frontend_server/settings/base.py`
+- `Simulacra/environment/frontend_server/frontend_server/settings/local.py`
+
+**Trước khi chỉnh:**
+
+```python
+ALLOWED_HOSTS = []
+```
+
+**Sau khi chỉnh:**
+
+```python
+# Cho phép truy cập từ IP server (vd. 10.0.12.81) khi bind 0.0.0.0; thêm IP khác nếu cần.
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '10.0.12.81']
+```
+
+**Ảnh hưởng:**
+
+- Truy cập `http://10.0.12.81:8000/simulator_home` (hoặc `http://127.0.0.1:8000/...`) không còn lỗi DisallowedHost.
+- Nếu sau này chạy frontend trên IP khác, thêm IP đó vào list (vd. `'10.0.12.82'`) hoặc dùng `ALLOWED_HOSTS = ['*']` chỉ trong môi trường dev nội bộ.
+
+---
+
 ## 2. Các README mới/bổ sung (tài liệu, không ảnh hưởng code)
 
 Các file README này **chỉ là tài liệu tham khảo**, không làm thay đổi hành vi chạy của chương trình.
