@@ -223,6 +223,10 @@ class Persona:
     plan = self.plan(maze, personas, new_day, retrieved)
     self.reflect()
 
+    # Nếu đang có hội thoại nhiều lượt, tiến dần theo từng bước simulation.
+    if getattr(self.scratch, "chat_full", None):
+      self.scratch.advance_chat()
+
     # <execution> is a triple set that contains the following components: 
     # <next_tile> is a x,y coordinate. e.g., (58, 9)
     # <pronunciatio> is an emoji. e.g., "\ud83d\udca4"

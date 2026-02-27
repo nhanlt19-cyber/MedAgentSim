@@ -142,6 +142,10 @@ class Scratch:
     # It comes in the form of: [["Dolores Murphy", "Hi"], 
     #                           ["Maeve Jenson", "Hi"] ...]
     self.chat = None
+    # <chat_full> lưu toàn bộ hội thoại (danh sách [speaker, utt]) để có thể
+    # phát dần từng bước; <chat_step_idx> là số lượt câu đã hiển thị.
+    self.chat_full = None
+    self.chat_step_idx = 0
     # <chatting_with_buffer>  
     # e.g., ["Dolores Murphy"] = self.vision_r
     self.chatting_with_buffer = dict()
@@ -232,6 +236,33 @@ class Scratch:
 
       self.act_path_set = scratch_load["act_path_set"]
       self.planned_path = scratch_load["planned_path"]
+
+    # Các trường chat_full / chat_step_idx không được lưu trong bootstrap,
+    # nên luôn khởi tạo lại mỗi khi load.
+    self.chat_full = None
+    self.chat_step_idx = 0
+
+  def start_chat(self, convo):
+    """
+    Khởi động một cuộc hội thoại nhiều lượt cho persona.
+    - convo: danh sách [[speaker, text], ...] đã sinh sẵn.
+    Sau khi gọi, bước kế tiếp sẽ hiển thị lượt câu đầu tiên.
+    """
+    self.chat_full = convo or []
+    self.chat_step_idx = 0
+    self.chat = []
+
+  def advance_chat(self):
+    """
+    Tiến một bước hội thoại:
+    - Tăng chat_step_idx nếu còn câu mới
+    - Cập nhật self.chat bằng prefix hội thoại tới thời điểm hiện tại
+    """
+    if not self.chat_full:
+      return
+    if self.chat_step_idx < len(self.chat_full):
+      self.chat_step_idx += 1
+      self.chat = self.chat_full[:self.chat_step_idx]
 
 
   def save(self, out_json):

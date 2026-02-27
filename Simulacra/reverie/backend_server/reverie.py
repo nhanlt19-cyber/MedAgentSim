@@ -513,7 +513,10 @@ class ReverieServer:
 
       try: 
         if sim_command.lower() == "toq":
-          self.start_server(5000)
+          # Chế độ TOQ khi được gọi từ `medsim.simulate` chỉ cần chạy đủ
+          # số bước để hoàn thành một ca lâm sàng, không cần 5000 bước.
+          # Giảm xuống 100 bước để thời gian chạy ngắn hơn khi test.
+          self.start_server(100)
           self.save()
           break
         elif sim_command.lower() in ["f", "fin", "finish", "save and finish"]: 

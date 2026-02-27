@@ -472,24 +472,120 @@ os.makedirs(fs_temp_storage, exist_ok=True)
 **File đã sửa:**  
 `Simulacra/reverie/backend_server/persona/cognitive_modules/plan.py`
 
-**Thay đổi chính (trong hàm `_chat_react`)** – ngay sau khi gọi `generate_convo`:
+**Thay đổi ban đầu:** (phiên bản cũ) gán toàn bộ `convo` một lần vào `scratch.chat` cho cả hai persona, nên frontend nhận đủ hội thoại nhưng đổ ra một lần (không có cảm giác chat theo thời gian).
+
+**Thay đổi hiện tại:** kết hợp với mục 1.14 bên dưới để “phát” hội thoại từng bước.
+
+---
+
+### 1.14. Chia nhỏ hội thoại theo từng bước simulation để hiển thị giống chat realtime
+
+**Mục đích:** Thay vì frontend hiển thị toàn bộ cuộc hội thoại Doctor–Patient trong một khung duy nhất ngay khi họ gặp nhau, ta muốn mỗi bước simulation chỉ thêm 1–2 lượt câu, tạo cảm giác chat realtime mà **không tăng thêm số lần gọi LLM** (vẫn chỉ một lần `prep()` sinh full `dialogue_history.json`).
+
+**File đã sửa:**
+
+- `Simulacra/reverie/backend_server/persona/memory_structures/scratch.py`
+- `Simulacra/reverie/backend_server/persona/persona.py`
+- `Simulacra/reverie/backend_server/persona/cognitive_modules/plan.py`
+
+**Chi tiết thay đổi:**
+
+- Trong `Scratch.__init__`:
+  - Thêm hai trường mới:
+    - `self.chat_full = None` – lưu toàn bộ hội thoại dạng `[[speaker, text], ...]`.
+    - `self.chat_step_idx = 0` – số lượt câu đã “phát” ra frontend.
+- Sau khi load bootstrap từ `scratch.json`, luôn reset:
+
+```python
+self.chat_full = None
+self.chat_step_idx = 0
+```
+
+- Thêm hai phương thức mới trong `Scratch`:
+
+```python
+def start_chat(self, convo):
+    """
+    Khởi động một cuộc hội thoại nhiều lượt cho persona.
+    - convo: danh sách [[speaker, text], ...] đã sinh sẵn.
+    Sau khi gọi, bước kế tiếp sẽ hiển thị lượt câu đầu tiên.
+    """
+    self.chat_full = convo or []
+    self.chat_step_idx = 0
+    self.chat = []
+
+def advance_chat(self):
+    """
+    Tiến một bước hội thoại:
+    - Tăng chat_step_idx nếu còn câu mới
+    - Cập nhật self.chat bằng prefix hội thoại tới thời điểm hiện tại
+    """
+    if not self.chat_full:
+        return
+    if self.chat_step_idx < len(self.chat_full):
+        self.chat_step_idx += 1
+        self.chat = self.chat_full[:self.chat_step_idx]
+```
+
+- Trong `plan._chat_react(...)`:
+
+Thay vì gán thẳng `scratch.chat = convo`, giờ gọi:
 
 ```python
 convo, duration_min = generate_convo(maze, init_persona, target_persona)
-# Gán hội thoại vào scratch.chat để frontend có thể hiển thị ngay
-init_persona.scratch.chat = convo
-target_persona.scratch.chat = convo
+init_persona.scratch.start_chat(convo)
+target_persona.scratch.start_chat(convo)
 ```
 
-Phần còn lại của `_chat_react` giữ nguyên (tạo `inserted_act`, cập nhật schedule và gọi `_create_react`).
+- Trong `Persona.move(...)`:
+
+Ngay sau `plan = self.plan(...)` và `self.reflect()`, thêm:
+
+```python
+if getattr(self.scratch, "chat_full", None):
+    self.scratch.advance_chat()
+```
 
 **Ảnh hưởng:**
 
-- Khi điều kiện chat thỏa (Maria Lopez và Klaus Mueller gặp nhau), Reverie:
-  - Gọi pipeline MedAgentSim (NEJM / MedQA…) qua `generate_convo` → `agent_chat_v3` → `prep`.
-  - Nhận `convo` dạng `[[speaker, text], ...]` và lưu ngay vào `scratch.chat` cho cả hai persona.
-  - Bước ghi `movement/<step>.json` sau đó đặt `"chat": [...]` thay vì `null`.
-- Frontend (`home/main_script.html`) đọc trường `chat` và hiển thị đầy đủ đoạn hội thoại dưới **Current Conversation** cho Klaus Mueller và Maria Lopez (thay vì “None at the moment”), đúng với mong muốn chạy 1 kịch bản có frontend.
+- Khi Doctor–Patient bắt đầu hội thoại:
+  - `generate_convo` vẫn gọi pipeline MedAgentSim (NEJM/MedQA…) một lần và trả về full `convo`.
+  - `start_chat(convo)` lưu full hội thoại vào `chat_full`, reset `chat_step_idx`.
+- Mỗi bước simulation tiếp theo:
+  - `Persona.move` gọi `advance_chat()` ⇒ `scratch.chat` chứa **prefix hội thoại** (1, 2, 3, … câu).
+  - File `movement/<step>.json` ghi `"chat": [...]` tăng dần theo thời gian.
+  - Frontend (`home/main_script.html`) mỗi lần update sẽ render thêm các câu mới, tạo cảm giác chat realtime mà không cần thêm request tới LLM.
+
+---
+
+### 1.15. Giảm số bước tối đa trong Reverie khi chạy TOQ (tối ưu thời gian test frontend)
+
+**Mục đích:** Ở code gốc, khi chạy lệnh `"toq"` trong `reverie.py` (được `medsim.simulate` dùng mặc định), Reverie gọi `self.start_server(5000)`, tức là cho phép tối đa 5000 bước simulation cho một lần chạy. Với backend LLM (Ollama) và NEJM scenario, 5000 bước là quá lớn cho mục đích test frontend – dẫn tới thời gian chạy rất lâu.
+
+**File đã sửa:**  
+`Simulacra/reverie/backend_server/reverie.py`
+
+**Thay đổi:** Trong `ReverieServer.open_server`, nhánh `if sim_command.lower() == "toq":` đổi:
+
+```python
+self.start_server(5000)
+```
+
+thành:
+
+```python
+# Chế độ TOQ khi được gọi từ `medsim.simulate` chỉ cần chạy đủ
+# số bước để hoàn thành một ca lâm sàng, không cần 5000 bước.
+# Giảm xuống 100 bước để thời gian chạy ngắn hơn khi test.
+self.start_server(100)
+```
+
+**Ảnh hưởng:**
+
+- Khi chạy `python -m medsim.simulate`, mỗi scenario chỉ cho phép **tối đa ~100 bước** trong Reverie:
+  - Đủ cho Maria Lopez và Klaus Mueller gặp nhau, chạy hội thoại MedAgentSim và kết thúc ca.
+  - Giảm đáng kể thời gian chờ so với 5000 bước, đặc biệt khi test frontend nhiều lần.
+- Nếu sau này cần chạy lâu hơn (ví dụ nghiên cứu hành vi dài hạn), có thể tăng giá trị này (200, 500, …) hoặc trả lại 5000 tùy nhu cầu.
 
 ---
 
