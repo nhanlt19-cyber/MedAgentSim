@@ -514,9 +514,11 @@ class ReverieServer:
       try: 
         if sim_command.lower() == "toq":
           # Chế độ TOQ khi được gọi từ `medsim.simulate` chỉ cần chạy đủ
-          # số bước để hoàn thành một ca lâm sàng, không cần 5000 bước.
-          # Giảm xuống 100 bước để thời gian chạy ngắn hơn khi test.
-          self.start_server(100)
+          # số bước để hoàn thành một ca lâm sàng, nhưng vẫn cần dư bước
+          # để "phát" dần hội thoại Doctor–Patient ra frontend.
+          # Dùng 300 bước như một mức trung gian: nhanh hơn 5000 bước gốc,
+          # nhưng dài hơn 100 bước để streaming chat kịp hiển thị nhiều câu.
+          self.start_server(300)
           self.save()
           break
         elif sim_command.lower() in ["f", "fin", "finish", "save and finish"]: 

@@ -565,7 +565,7 @@ if getattr(self.scratch, "chat_full", None):
 **File đã sửa:**  
 `Simulacra/reverie/backend_server/reverie.py`
 
-**Thay đổi:** Trong `ReverieServer.open_server`, nhánh `if sim_command.lower() == "toq":` đổi:
+**Thay đổi ban đầu:** Trong `ReverieServer.open_server`, nhánh `if sim_command.lower() == "toq":` đổi:
 
 ```python
 self.start_server(5000)
@@ -575,17 +575,52 @@ thành:
 
 ```python
 # Chế độ TOQ khi được gọi từ `medsim.simulate` chỉ cần chạy đủ
-# số bước để hoàn thành một ca lâm sàng, không cần 5000 bước.
-# Giảm xuống 100 bước để thời gian chạy ngắn hơn khi test.
-self.start_server(100)
+# số bước để hoàn thành một ca lâm sàng, nhưng vẫn cần dư bước
+# để "phát" dần hội thoại Doctor–Patient ra frontend.
+# Dùng 300 bước như một mức trung gian: nhanh hơn 5000 bước gốc,
+# nhưng dài hơn 100 bước để streaming chat kịp hiển thị nhiều câu.
+self.start_server(300)
+```
+
+**Ảnh hưởng (phiên bản hiện tại):**
+
+- Mỗi scenario khi chạy `python -m medsim.simulate` có tối đa **300 bước**:
+  - Vẫn ngắn hơn rất nhiều so với 5000 bước gốc (thời gian test hợp lý hơn).
+  - Có đủ số bước sau khi Doctor–Patient bắt đầu hội thoại để cơ chế streaming (`advance_chat`) hiển thị dần nhiều câu trong frontend.
+
+---
+
+### 1.16. Đưa vị trí xuất phát của Doctor và Patient lại gần nhau để hội thoại bắt đầu sớm
+
+**Mục đích:** Nếu Maria Lopez và Klaus Mueller đứng quá xa nhau ở step 0, Reverie mất rất nhiều bước để đưa họ tới cùng một phòng, khiến hội thoại bắt đầu rất trễ (gần cuối quota step). Khi đó, dù có streaming thì cũng chỉ kịp hiển thị 1–2 câu trước khi simulation kết thúc.
+
+**File đã sửa:**  
+`Simulacra/environment/frontend_server/storage/test-simulation/environment/0.json`
+
+**Trước khi sửa:**
+
+```json
+{
+  "Maria Lopez": { "maze": "the_ville", "x": 43, "y": 26 },
+  "Klaus Mueller": { "maze": "the_ville", "x": 60, "y": 80 }
+}
+```
+
+**Sau khi sửa:**
+
+```json
+{
+  "Maria Lopez": { "maze": "the_ville", "x": 43, "y": 26 },
+  "Klaus Mueller": { "maze": "the_ville", "x": 45, "y": 26 }
+}
 ```
 
 **Ảnh hưởng:**
 
-- Khi chạy `python -m medsim.simulate`, mỗi scenario chỉ cho phép **tối đa ~100 bước** trong Reverie:
-  - Đủ cho Maria Lopez và Klaus Mueller gặp nhau, chạy hội thoại MedAgentSim và kết thúc ca.
-  - Giảm đáng kể thời gian chờ so với 5000 bước, đặc biệt khi test frontend nhiều lần.
-- Nếu sau này cần chạy lâu hơn (ví dụ nghiên cứu hành vi dài hạn), có thể tăng giá trị này (200, 500, …) hoặc trả lại 5000 tùy nhu cầu.
+- Ngay từ step 0, Klaus Mueller đã đứng **cùng dãy phòng** với Maria Lopez (chỉ lệch vài ô theo trục x), nên:
+  - Điều kiện “chat with” trong `plan.py` được thỏa **sớm hơn nhiều**.
+  - Hội thoại MedAgentSim (NEJM/MedQA) được khởi động sớm trong 300 bước cho phép.
+  - Cơ chế streaming (`start_chat` + `advance_chat`) có đủ số bước để dần dần hiển thị nhiều câu hội thoại trên frontend, thay vì chỉ thấy một câu cuối cùng trước khi simulation dừng.
 
 ---
 
