@@ -331,7 +331,6 @@ def generate_convo(maze, init_persona, target_persona):
     # ['Klaus Mueller', 'Thank you, Dr. Lopez. I will make sure to follow your advice on avoiding hard or sticky foods.']]
     #"""
     convo = agent_chat_v3(doctor_name, patient_name)
-    set_simulation_inactive()
   else:
     # convo = run_gpt_prompt_create_conversation(init_persona, target_persona, curr_loc)[0]
     # convo = agent_chat_v1(maze, init_persona, target_persona)
