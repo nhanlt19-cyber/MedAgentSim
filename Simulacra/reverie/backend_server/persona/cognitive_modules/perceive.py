@@ -21,11 +21,29 @@ def generate_poig_score(persona, event_type, description):
   if "is idle" in description: 
     return 1
 
-  if event_type == "event": 
-    return run_gpt_prompt_event_poignancy(persona, description)[0]
-  elif event_type == "chat": 
-    return run_gpt_prompt_chat_poignancy(persona, 
-                           persona.scratch.act_description)[0]
+  try:
+    if event_type == "event": 
+      res = run_gpt_prompt_event_poignancy(persona, description)
+    elif event_type == "chat": 
+      res = run_gpt_prompt_chat_poignancy(
+        persona, persona.scratch.act_description
+      )
+    else:
+      return 1
+
+    # Một số backend có thể trả None hoặc list rỗng; fallback về 1.
+    if not res:
+      return 1
+    return res[0]
+  except Exception as e:
+    logger.warning(
+      "generate_poig_score failed for %s (%s): %s",
+      event_type,
+      description,
+      e,
+    )
+    # Nếu chấm điểm thất bại, coi như sự kiện ít quan trọng để tránh crash.
+    return 1
 
 def perceive(persona, maze): 
   """

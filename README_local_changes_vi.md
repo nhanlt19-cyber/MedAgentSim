@@ -624,6 +624,59 @@ self.start_server(300)
 
 ---
 
+### 1.17. Làm `generate_poig_score` an toàn hơn (tránh crash khi chấm điểm poignancy)
+
+**Mục đích:** Trong module `perceive.py`, hàm `generate_poig_score` trước đây gọi trực tiếp:
+
+```python
+if event_type == "event":
+    return run_gpt_prompt_event_poignancy(persona, description)[0]
+elif event_type == "chat":
+    return run_gpt_prompt_chat_poignancy(persona, persona.scratch.act_description)[0]
+```
+
+Khi backend LLM (hoặc hàm `run_gpt_prompt_chat_poignancy`) trả về `None` hoặc list rỗng, truy cập `[0]` gây lỗi `TypeError: 'NoneType' object is not subscriptable`, làm Reverie crash tại bước đang perceive chat.
+
+**File đã sửa:**  
+`Simulacra/reverie/backend_server/persona/cognitive_modules/perceive.py`
+
+**Sau khi sửa (rút gọn):**
+
+```python
+def generate_poig_score(persona, event_type, description): 
+    if "is idle" in description:
+        return 1
+
+    try:
+        if event_type == "event":
+            res = run_gpt_prompt_event_poignancy(persona, description)
+        elif event_type == "chat":
+            res = run_gpt_prompt_chat_poignancy(
+                persona, persona.scratch.act_description
+            )
+        else:
+            return 1
+
+        if not res:
+            return 1
+        return res[0]
+    except Exception as e:
+        logger.warning(
+            "generate_poig_score failed for %s (%s): %s",
+            event_type,
+            description,
+            e,
+        )
+        return 1
+```
+
+**Ảnh hưởng:**
+
+- Nếu chấm điểm poignancy thất bại (LLM trả về `None`, list rỗng, hoặc lỗi bất kỳ), Reverie **không bị dừng** mà gán điểm `1` (ít quan trọng) cho event/chat đó.
+- Lỗi `TypeError: 'NoneType' object is not subscriptable` trong quá trình simulate không còn xảy ra, cho phép pipeline chạy trọn vẹn 1 kịch bản NEJM với frontend.
+
+---
+
 ## 2. Các README mới/bổ sung (tài liệu, không ảnh hưởng code)
 
 Các file README này **chỉ là tài liệu tham khảo**, không làm thay đổi hành vi chạy của chương trình.
