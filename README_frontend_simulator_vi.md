@@ -258,12 +258,32 @@ Bạn có thể chỉnh `num_scenarios` trong `config_sim.yaml` để chạy nhi
 - **Cách 2 – Giảm số step tối đa khi chạy frontend**: Trong `Simulacra/reverie/backend_server/reverie.py`, lệnh `toq` gọi `self.start_server(5000)` (tối đa 5000 step). Có thể tạm đổi thành `self.start_server(50)` hoặc `100` để Reverie dừng sớm hơn (khi đó có thể chưa kịp gặp nhau, chỉ để xem log/flow).
 - **Cách 3 – Fork có sẵn hai nhân vật cùng phòng**: Tạo (hoặc chỉnh) fork trong `storage/` sao cho ở step 0/1 Maria và Klaus đã ở **cùng tọa độ (x,y)** (cùng phòng). Khi đó Reverie sẽ gần như ngay lập tức vào `generate_convo` và gọi MedAgentSim, bạn thấy đoạn doctor–patient trao đổi sớm hơn nhiều (sau vài step đầu).
 
+### 7.5. Vì sao sau khi có "DIAGNOSIS READY" log vẫn chạy tiếp (Summarize the conversation…)
+
+Trong log bạn thấy:
+
+1. **"DIAGNOSIS READY: Multiple Sclerosis (MS)"** — đây là **kết thúc của pipeline MedAgentSim** (phần lâm sàng): bác sĩ đã đưa ra chẩn đoán, pipeline ghi log và coi như xong một ca.
+
+2. **Sau đó vẫn xuất hiện** các dòng như *"Summarize the conversation above in one sentence"*, *"This is a conversation about"*, *"Output the response to the prompt above in json"*, v.v.
+
+**Nguyên nhân:** Có **hai hệ thống** chạy độc lập:
+
+- **MedAgentSim (clinical pipeline):** Chạy *bên trong* Reverie khi bác sĩ và bệnh nhân gặp nhau. Khi dialogue có câu "DIAGNOSIS READY", pipeline coi ca lâm sàng hoàn tất và dừng vòng lặp inference của mình. Log "DIAGNOSIS READY" là từ pipeline này.
+
+- **Reverie (The Ville):** Là vòng lặp mô phỏng thế giới 2D, chạy **cố định** theo số step (ví dụ 300 bước) hoặc đến khi `simulation_active = 0`. Reverie **không** đọc nội dung "DIAGNOSIS READY" để dừng. Sau khi hội thoại Doctor–Patient được “phát” (streaming chat), Reverie vẫn tiếp tục:
+  - **Bước nhận thức (perception):** Nhân vật “nhìn thấy” sự kiện chat → Reverie gọi LLM để **tóm tắt cuộc hội thoại** (tạo bản tóm tắt một câu cho memory). Đó chính là prompt *"Summarize the conversation above in one sentence"* trong `summarize_conversation_v1.txt`.
+  - Sau đó Reverie vẫn chạy thêm các step (di chuyển, lên kế hoạch, v.v.) cho đến hết số step hoặc khi có lệnh dừng.
+
+**Kết luận:** Đoạn log sau "DIAGNOSIS READY" là **hành vi bình thường** của Reverie (phần tóm tắt hội thoại cho memory của nhân vật), không phải lỗi. Nếu muốn dừng simulation ngay khi đã có chẩn đoán, cần thêm cơ chế (ví dụ gọi `set_simulation_inactive()` khi pipeline phát hiện "DIAGNOSIS READY") — hiện tại code **không** làm điều đó để có đủ bước “phát” dần hội thoại ra frontend và tránh dừng quá sớm.
+
 ---
 
 ## 8. Đồng bộ frontend – backend và khi nào chat cập nhật
 
 - **Thứ tự chạy bắt buộc**: Luôn chạy **Terminal 1** (`python -m medsim.server`) trước, mở trình duyệt tới `http://.../simulator_home` và **giữ tab mở**. Sau đó mới chạy **Terminal 2** (`python -m medsim.simulate`). Nếu frontend chưa chạy, `medsim.simulate` sẽ ghi log cảnh báo.
 - **Khi nào khung "Current Conversation" có nội dung**: Nội dung chat là hội thoại **Doctor ↔ Patient** do MedAgentSim sinh ra. Nó **chỉ xuất hiện** khi hai nhân vật (bác sĩ **Maria Lopez** và bệnh nhân **Klaus Mueller**) **cùng vị trí** trong bệnh viện và Reverie gọi pipeline MedAgentSim (LLM); có thể mất **vài chục giây đến vài phút** (tùy model Ollama). Trước khi gặp nhau, khung chat có thể hiển thị *"None at the moment"*.
+- **Lọc theo từng nhân vật**: Mỗi khối (Maria Lopez / Klaus Mueller) **chỉ hiển thị phần thoại của chính nhân vật đó** — khối **Maria Lopez** chỉ hiện câu hỏi của bác sĩ, khối **Klaus Mueller** chỉ hiện câu trả lời của bệnh nhân (xem mục 1.18 trong `README_local_changes_vi.md`).
+- **Realtime**: Chat cập nhật **theo từng bước** backend: Reverie gửi hội thoại tăng dần qua `movement/<step>.json` (chunked chat), frontend mỗi lần nhận step mới từ `update_environment` sẽ cập nhật lại khung conversation.
 - **Demo video**: Demo (bản đồ 2D + nhân vật di chuyển + chat) tương ứng luồng hiện tại: Reverie điều khiển di chuyển, khi bác sĩ và bệnh nhân gặp nhau thì chat được sinh và hiển thị. Nếu chat không đổi, đợi nhân vật gặp nhau và đảm bảo frontend server đang chạy, tab đang mở.
 
 ---

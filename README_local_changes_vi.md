@@ -677,6 +677,28 @@ def generate_poig_score(persona, event_type, description):
 
 ---
 
+### 1.18. Frontend – mỗi agent chỉ hiển thị phần thoại của chính mình (doctor / patient)
+
+**Mục đích:** Trước đây khung "Current Conversation" hiển thị **toàn bộ** hội thoại (câu hỏi của doctor + câu trả lời của patient) cho **cả hai** nhân vật Maria Lopez và Klaus Mueller. Yêu cầu: agent **doctor** (Maria Lopez) chỉ thấy **câu hỏi của doctor**, agent **patient** (Klaus Mueller) chỉ thấy **câu trả lời của patient**; đồng thời chat cập nhật **realtime** theo từng bước backend (đã có sẵn qua chunked chat).
+
+**File đã sửa:**
+
+- `Simulacra/environment/frontend_server/templates/home/main_script.html`
+- `Simulacra/environment/frontend_server/templates/home/main_script_old_dolores.html`
+- `Simulacra/environment/frontend_server/templates/demo/main_script.html`
+
+**Thay đổi:**
+
+- Khi render nội dung chat cho từng persona (`curr_persona_name`), **chỉ thêm vào `chat_content` những dòng** mà `chat_list[j][0]` (speaker) **trùng với** `curr_persona_name` (hoặc `curr_persona_name` đã chuẩn hóa space/underscore tùy template). Các template trước đó in toàn bộ `chat[j][0] + ": " + chat[j][1]` cho mọi speaker.
+- Nếu sau khi lọc không còn dòng nào thì hiển thị *"None at the moment"*.
+
+**Ảnh hưởng:**
+
+- Trên giao diện, khối **Maria Lopez** chỉ hiển thị các câu do Maria Lopez nói (câu hỏi bác sĩ); khối **Klaus Mueller** chỉ hiển thị các câu do Klaus Mueller nói (câu trả lời bệnh nhân).
+- Chat vẫn cập nhật **realtime** theo từng bước: backend gửi chat tăng dần qua `movement/<step>.json` (cơ chế chunked chat trong scratch/plan/persona), frontend mỗi lần nhận step mới từ `update_environment` sẽ cập nhật lại nội dung khung conversation cho từng persona.
+
+---
+
 ## 2. Các README mới/bổ sung (tài liệu, không ảnh hưởng code)
 
 Các file README này **chỉ là tài liệu tham khảo**, không làm thay đổi hành vi chạy của chương trình.
