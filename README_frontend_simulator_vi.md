@@ -274,7 +274,192 @@ Trong log bạn thấy:
   - **Bước nhận thức (perception):** Nhân vật “nhìn thấy” sự kiện chat → Reverie gọi LLM để **tóm tắt cuộc hội thoại** (tạo bản tóm tắt một câu cho memory). Đó chính là prompt *"Summarize the conversation above in one sentence"* trong `summarize_conversation_v1.txt`.
   - Sau đó Reverie vẫn chạy thêm các step (di chuyển, lên kế hoạch, v.v.) cho đến hết số step hoặc khi có lệnh dừng.
 
-**Kết luận:** Đoạn log sau "DIAGNOSIS READY" là **hành vi bình thường** của Reverie (phần tóm tắt hội thoại cho memory của nhân vật), không phải lỗi. Nếu muốn dừng simulation ngay khi đã có chẩn đoán, cần thêm cơ chế (ví dụ gọi `set_simulation_inactive()` khi pipeline phát hiện "DIAGNOSIS READY") — hiện tại code **không** làm điều đó để có đủ bước “phát” dần hội thoại ra frontend và tránh dừng quá sớm.
+**Kết luận:** Đoạn log sau "DIAGNOSIS READY" là **hành vi bình thường** của Reverie (phần tóm tắt hội thoại cho memory của nhân vật), không phải lỗi. Nếu muốn dừng simulation ngay khi đã có chẩn đoán, cần thêm cơ chế (ví dụ gọi `set_simulation_inactive()` khi pipeline phát hiện "DIAGNOSIS READY") — từ bản cập nhật (mục 1.19) simulation **tự dừng** khi đã có chẩn đoán và stream hết chat; không còn chạy hết 300 bước. Trước đây code **không** làm điều đó để có đủ bước “phát” dần hội thoại ra frontend và tránh dừng quá sớm.
+
+---
+
+### 7.6. Vì sao frontend đã hiện xong cuộc trò chuyện mà backend log vẫn in "Maria Lopez is currently in {Hospital}", "GNS FUNCTION: <generate_action_arena>", v.v.?
+
+Bạn thấy **hai thứ không đồng bộ**:
+
+- **Frontend:** Khung "Current Conversation" đã hiển thị **toàn bộ** hội thoại (từ câu hỏi đầu đến "DIAGNOSIS READY: Multiple Sclerosis (MS)").
+- **Backend log:** Vẫn liên tục in các dòng như *"Maria Lopez is currently in {Hospital} that has ..."*, *"GNS FUNCTION: <generate_action_arena>"*, *"persona/prompt_template/v1/action_location_object_vMar11.txt"*, v.v.
+
+**Giải thích chi tiết:**
+
+1. **Hội thoại lâm sàng được tạo "một lần" khi hai nhân vật gặp nhau**  
+   Khi Maria Lopez và Klaus Mueller **cùng một ô** (cùng phòng), Reverie gọi `generate_convo` → `agent_chat_v3` → pipeline MedAgentSim chạy (hoặc load từ `dialogue_history.json`). Toàn bộ cuộc hội thoại (tất cả câu hỏi của bác sĩ, câu trả lời của bệnh nhân, và "DIAGNOSIS READY") được **sinh/load xong trong một lần** tại bước đó. Nội dung này được lưu vào `scratch.chat_full` của cả hai persona.
+
+2. **"Chunked chat" chỉ là cách hiển thị dần ra frontend**  
+   Backend **không** gửi full chat một lần. Mỗi **step** tiếp theo, `persona.move()` gọi `advance_chat()` → `scratch.chat` chỉ chứa **prefix** của hội thoại (1, 2, 3, … câu). Frontend mỗi lần nhận `movement/<step>.json` mới thì cập nhật khung conversation theo prefix đó. Sau **đủ số step** (ít nhất bằng số lượt thoại), frontend sẽ nhận đủ toàn bộ hội thoại và hiển thị "xong" (từ câu đầu đến DIAGNOSIS READY).
+
+3. **Reverie vẫn chạy vòng lặp step bình thường**  
+   Trong khi nội dung hội thoại **đã có đủ trong memory** và đã được "phát" hết ra frontend, **vòng lặp simulation** của Reverie **không dừng**. Mỗi step, với **mỗi** persona, backend vẫn chạy đầy đủ pipeline nhận thức và hành động:
+   - Đọc vị trí hiện tại (vd. Hospital, Dentistry Consultation Room).
+   - Gọi LLM để quyết định: khu vực (sector) → `generate_action_sector` → log *"Maria Lopez is currently in {Hospital} that has ..."*.
+   - Rồi phòng/địa điểm (arena) → `generate_action_arena` → log *"GNS FUNCTION: <generate_action_arena>"*, *"persona/prompt_template/v1/action_location_object_vMar11.txt"*, v.v.
+   - Tiếp tục: game object, pronunciatio, event, movement, perception (tóm tắt hội thoại cho memory), v.v.
+
+   Tất cả các bước đó vẫn chạy **từng step một** cho đến khi hết số step tối đa (vd. 300) hoặc `simulation_active = 0`. Vì vậy log backend vẫn in đầy đủ các prompt và tên function (sector, arena, …) **sau khi** frontend đã hiển thị xong cuộc trò chuyện.
+
+4. **Hai "timeline" khác nhau**  
+   - **Timeline nội dung hội thoại:** Kết thúc ngay khi hai người gặp nhau và pipeline MedAgentSim chạy xong (và sau đó vài step thì frontend đã nhận đủ chunked chat → trông như "xong cuộc trò chuyện").  
+   - **Timeline simulation (Reverie):** Vẫn chạy từng step (di chuyển, lên kế hoạch, nhận thức, ghi memory) cho đến hết 300 bước hoặc khi bị dừng.
+
+**Tóm lại:** Frontend "xong cuộc trò chuyện" vì đã nhận đủ **nội dung** hội thoại (được phát dần qua chunked chat). Backend log vẫn in **các bước simulation** (sector, arena, prompt template, …) vì Reverie vẫn đang chạy vòng lặp step bình thường. Đây là **hành vi đúng** của kiến trúc hiện tại, không phải lỗi.
+
+### 7.7. Vì sao đoạn log "['Maria Lopez', 'preparing the consultation room...']" và "~~~ prompt" lại mất rất lâu? Thời gian chạy qua từng step
+
+Bạn thấy log dạng:
+
+```
+['Maria Lopez', 'preparing the consultation room for the first patient', 'Maria Lopez']
+~~~ prompt    ----------------------------------------------------
+```
+
+sau đó **rất lâu** mới có dòng tiếp theo.
+
+**Nguyên nhân:** Đây là log của **một lần gọi LLM** (Ollama) trong Reverie. Thứ tự thực thi trong code:
+
+1. In **"GNS FUNCTION: <generate_action_event_triple>"** (nếu `debug=True`).
+2. Gọi `run_gpt_prompt_event_triple(act_desp, persona)`:
+   - Tạo `prompt_input` = `[persona.name, action_description, persona.name]` → đây chính là dòng **['Maria Lopez', 'preparing the consultation room...', 'Maria Lopez']** trong log.
+   - Tạo full prompt từ template `generate_event_triple_v1.txt`.
+   - Gọi **`safe_generate_response(prompt, ...)`** → **chương trình chờ tại đây** cho đến khi Ollama trả lời (inference). Đây là đoạn **mất nhiều thời gian** (vài giây đến vài chục giây, tùy model và phần cứng).
+   - Sau khi LLM trả về, mới gọi `print_run_prompts(...)` → in ra **prompt_input**, **"~~~ prompt"**, nội dung prompt và output.
+
+Vì vậy: **khoảng thời gian “rất lâu”** là thời gian **chờ Ollama xử lý** một prompt (sinh event triple: chủ ngữ – động từ – tân ngữ cho hành động của nhân vật). Log chỉ xuất hiện **sau khi** LLM đã trả lời.
+
+**Thời gian chạy qua từng step (một vòng Reverie):**
+
+Mỗi **một step** của simulation, backend làm (tóm tắt):
+
+| Giai đoạn | Nội dung | Số lần gọi LLM (ước lượng) | Thời gian chủ yếu |
+|-----------|----------|-----------------------------|-------------------|
+| Với **mỗi persona** (Maria, Klaus) | `persona.move()` → `plan()` → quyết định hành động | ~8 lần/persona | Mỗi lần = 1 request tới Ollama |
+| 1 | `generate_action_sector` (khu vực: Hospital, Outdoors, …) | 1 | Chờ Ollama |
+| 2 | `generate_action_arena` (phòng: Dentistry Consultation Room, …) | 1 | Chờ Ollama |
+| 3 | `generate_action_game_object` (điểm đến cụ thể trong phòng) | 1 | Chờ Ollama |
+| 4 | `generate_action_pronunciatio` (emoji mô tả hành động) | 1 | Chờ Ollama |
+| 5 | **`generate_action_event_triple`** (event: Maria Lopez, preparing..., Maria Lopez) ← **đúng đoạn log bạn hỏi** | 1 | Chờ Ollama |
+| 6 | `generate_act_obj_desc` (mô tả hành động với object) | 1 | Chờ Ollama |
+| 7 | `generate_action_pronunciatio` (cho object) | 1 | Chờ Ollama |
+| 8 | `generate_act_obj_event_triple` (event cho object) | 1 | Chờ Ollama |
+| **Tổng 1 persona** | | **8** | 8 × (thời gian 1 lần gọi Ollama) |
+| **Tổng 1 step (2 persona)** | | **~16** | ~16 lần chờ LLM |
+
+Ngoài ra trong cùng step có thể còn: retrieval từ memory, perception (nhận thức sự kiện/chat), tóm tắt hội thoại (nếu đang chat), v.v., mỗi thứ có thể thêm vài lần gọi LLM. **Một step** do đó thường tương đương **khoảng 10–20+ lần gọi LLM**, mỗi lần vài giây → **một step có thể mất từ vài chục giây đến vài phút**.
+
+**Kết luận:**
+
+- Đoạn log **"['Maria Lopez', 'preparing the consultation room...']"** và **"~~~ prompt"** xuất hiện **sau khi** LLM đã trả lời cho prompt đó. Thời gian “rất lâu” bạn thấy là **thời gian chờ Ollama** (inference) cho **đúng** lần gọi `generate_action_event_triple` đó.
+- Mỗi step của Reverie gồm **nhiều** lần gọi LLM tương tự (sector, arena, game object, pronunciatio, event triple, object desc, …) cho **từng** nhân vật, nên tổng thời gian một step rất lớn so với CLI (chỉ chạy vòng Doctor–Patient ít lần gọi LLM).
+
+### 7.8. Một vòng Reverie chi tiết và log có ghi lại hết không
+
+Dưới đây là **một vòng (một step)** của Reverie từ khi có file `environment/<step>.json` đến khi ghi xong `movement/<step>.json`. Luồng thực thi và **những gì xuất hiện trong log** (khi chạy qua `medsim.simulate`, stdout của tiến trình Reverie được đọc từng dòng và ghi bằng `logger.info`):
+
+---
+
+#### A. Đầu vòng (trong `reverie.py` – `start_server`)
+
+| Bước | Hành động | Có trong log? |
+|------|-----------|----------------|
+| 1 | Kiểm tra `simulation_active`, `int_counter` | Không (không có `print`) |
+| 2 | Đợi tồn tại file `environment/<step>.json` (frontend đã gửi vị trí) | Không |
+| 3 | Đọc `new_env` từ file, cập nhật `personas_tile`, dọn `game_obj_cleanup`, đồng bộ event lên bản đồ | Không |
+| 4 | Với **mỗi persona** (Maria Lopez, Klaus Mueller): gọi `persona.move(maze, personas, curr_tile, curr_time)` | Không (chỉ thấy kết quả qua các bước bên dưới) |
+
+---
+
+#### B. Với từng persona: `persona.move()` → perceive → retrieve → plan → reflect → advance_chat → execute
+
+**B.1. Perceive (nhận thức)**  
+- Lấy các ô lân cận, cập nhật spatial memory, thu thập event trong arena, lọc theo `att_bandwidth`/`retention`, ghi event mới vào associative memory, gọi LLM để chấm **poignancy** (nếu có event/chat mới).  
+- **Log:** Không có `print` theo từng step; `logger.info("perceive")` chỉ chạy khi load module, không in từng lần perceive.
+
+**B.2. Retrieve (truy vấn memory)**  
+- Từ danh sách event vừa perceive, gọi `retrieve_relevant_events` và `retrieve_relevant_thoughts` (embedding + similarity).  
+- **Log:** Không có `print`; `logger.info("retrieve")` cũng chỉ khi load module.
+
+**B.3. Plan (lên kế hoạch / phản ứng)**  
+- **B.3.1.** Nếu `new_day`: `_long_term_planning` → `generate_wake_up_hour`, `generate_first_daily_plan`, `generate_hourly_schedule` (nhiều lần gọi LLM).  
+  - **Log:** Có `GNS FUNCTION: <generate_wake_up_hour>`, `<generate_first_daily_plan>`, `<generate_hourly_schedule>` (khi `debug=True`), và sau mỗi lần gọi LLM có thể có block `~~~ prompt_input`, `~~~ prompt`, `~~~ output` (nếu `debug` hoặc `verbose`).
+- **B.3.2.** Nếu hành động hiện tại đã hết thời gian: `_determine_action` → lần lượt:
+  - `generate_action_sector` → **Log:** `GNS FUNCTION: <generate_action_sector>` rồi (sau khi LLM trả lời) block prompt/prompt_input/output;
+  - `generate_action_arena` → tương tự;
+  - `generate_action_game_object` → tương tự;
+  - `generate_action_pronunciatio` → tương tự;
+  - `generate_action_event_triple` → tương tự (đây là nơi xuất hiện dòng `['Maria Lopez', 'preparing the consultation room...']` và `~~~ prompt`);
+  - `generate_act_obj_desc` → tương tự;
+  - `generate_action_pronunciatio` (cho object) → tương tự;
+  - `generate_act_obj_event_triple` → tương tự.
+- **B.3.3.** Nếu có event cần phản ứng (vd. thấy persona khác): `_choose_retrieved` → `_should_react` (LLM: có nói chuyện không?) → nếu "chat with X": `_chat_react` → `generate_convo` (MedAgentSim: load/gọi dialogue), `start_chat`, `set_diagnosis_ready` (nếu có DIAGNOSIS READY), `generate_convo_summary` (LLM).  
+  - **Log:** Có `GNS FUNCTION: <generate_decide_to_talk>` / `<generate_decide_to_react>`, `<generate_convo>`, và các dòng từ MedAgentSim/converse; block prompt/output tùy từng hàm.
+
+**B.4. Reflect (phản tư)**  
+- `run_reflect` → `generate_focal_points` (LLM), `new_retrieve`, `generate_insights_and_evidence` (LLM), có thể thêm thought/memo (LLM).  
+- **Log:** Có `GNS FUNCTION: <generate_focal_points>`, `<generate_insights_and_evidence>`, và có thể `print(ret)`; các lần gọi LLM khác có thể in prompt/output nếu debug/verbose.
+
+**B.5. Advance chat (chunked chat)**  
+- Nếu đang có `chat_full`: `scratch.advance_chat()` tăng `chat_step_idx`, cập nhật `scratch.chat`.  
+- **Log:** Không có.
+
+**B.6. Execute (thực thi di chuyển)**  
+- Tính đường đi từ `curr_tile` tới địa chỉ trong `plan` (path_finder), cập nhật `planned_path`, trả về `(next_tile, pronunciatio, description)`.  
+- **Log:** Có `print(plan)` → trong log sẽ thấy **địa chỉ hành động** (vd. `Hospital:...:Dentistry Consultation Room:...`).
+
+---
+
+#### C. Cuối vòng (trong `reverie.py`)
+
+| Bước | Hành động | Có trong log? |
+|------|-----------|----------------|
+| 1 | Ghi `movements` (movement, pronunciatio, description, chat) ra `movement/<step>.json` | Không |
+| 2 | `step += 1`, `curr_time += sec_per_step` | Không |
+| 3 | Nếu bật dừng sớm: đọc `simulation_controller.json`, nếu `diagnosis_ready` và đã stream hết chat → `set_simulation_inactive` | Không |
+| 4 | `int_counter -= 1`, `time.sleep(server_sleep)` | Không |
+
+---
+
+#### Log có ghi lại hết không?
+
+**Không.** Log bạn thấy (từ `medsim.simulate`) chỉ là **stdout** của tiến trình Reverie được đọc từng dòng và ghi bằng `logger.info`. Cụ thể:
+
+- **Có trong log:**  
+  - Các `print(...)` trong Reverie: tên persona khi khởi tạo, **`print(plan)`** trong execute (mỗi persona mỗi step), tất cả **`if debug: print ("GNS FUNCTION: ...")`**, và toàn bộ **`print_run_prompts(...)`** (prompt_input, `~~~ prompt`, prompt, output) sau mỗi lần gọi LLM khi `debug` hoặc `verbose` bật.  
+  - Các `print` khác còn bật (vd. một số `DEBUG:::`, `print(ret)` trong reflect).
+
+- **Không có trong log (hoặc không theo từng step):**  
+  - Số step hiện tại (`self.step`), `int_counter`, việc đọc/ghi file (`environment/*.json`, `movement/*.json`, `simulation_controller.json`).  
+  - Perceive / Retrieve: không có `print` theo từng lần gọi; `logger.info("perceive")` / `"retrieve"` chỉ chạy một lần khi load module (và có thể không xuất hiện nếu logging không in ra stdout).  
+  - Thứ tự persona (Maria trước hay Klaus trước) chỉ suy ra được qua thứ tự các dòng `GNS FUNCTION` / `print(plan)` (execute in plan theo từng persona trong vòng lặp).
+
+Để “thấy hết” hơn có thể: (1) bật logging trong Reverie ra stdout với level INFO và xem thêm `perceive`/`retrieve`/`reflect` nếu chúng ghi log; (2) thêm `print` (hoặc logger) tại đầu mỗi step với `step`, và sau khi ghi movement file (vd. `print(f"Step {step} done")`).
+
+---
+
+### 7.9. Simulation đứng lại ở "Maria Lopez" / "~~~ prompt" rất lâu (trên 1 giờ) – nguyên nhân và có nên chạy lại?
+
+**Hiện tượng:** Log dừng ở các dòng dạng `Maria Lopez`, `~~~ prompt_input`, `['Maria Lopez', 'preparing the consultation room...']`, `~~~ prompt` và không có dòng mới sau **hơn 1 giờ rưỡi**.
+
+**Nguyên nhân:** Các dòng đó in ra **sau khi** Reverie đã nhận xong phản hồi LLM cho `generate_action_event_triple`. Simulation đang **chờ phản hồi từ Ollama** cho **lần gọi LLM tiếp theo** (vd. `generate_act_obj_desc`). Code gọi `backend.query_model(prompt)` (BAgent/Ollama) **không có timeout**, nên nếu Ollama treo hoặc quá tải thì process chờ vô hạn. Hơn 1h30 cho một request prompt ngắn là bất thường → Ollama có thể treo, hết RAM/swap, hoặc lỗi kết nối.
+
+**Có nên chạy lại?** **Có.** Nguyên nhân thường gặp: **Ollama không chạy** (trong htop không thấy tiến trình ollama). Reverie gọi LLM qua BAgent → Ollama; nếu Ollama tắt thì request treo (trước đây không có connect timeout nên có thể chờ rất lâu). **Đã sửa trong code:** (1) `medsim/query_model.py`: dùng `timeout=(connect_timeout=15, read_timeout)` khi gọi Ollama → nếu Ollama không chạy, sau ~15 giây sẽ lỗi và retry, không treo vô hạn. (2) `medsim/simulate/__main__.py`: trước khi chạy scenario, kiểm tra Ollama reachable (`GET /api/tags`); nếu không thấy thì ghi log cảnh báo rõ ràng. **Cách xử lý:** (1) **Bật Ollama trước** khi chạy `python -m medsim.simulate`: trong terminal riêng chạy `ollama serve` (hoặc `systemctl start ollama`). (2) Kiểm tra: `curl http://localhost:11434/api/tags` hoặc `ps aux | grep ollama`. (3) Chạy lại simulate. Nếu bỏ qua cảnh báo và vẫn không chạy Ollama, log sẽ đứng ở "~~~ prompt" và sau vài lần retry (mỗi lần ~15s connect timeout) sẽ có thông báo lỗi từ Ollama.
+
+### 7.10. Ollama llama3.2 rất chậm – có nên nâng model lên với server 32 vCPU, 32GB RAM?
+
+**Tóm tắt:** Với **chỉ 32 vCPU + 32GB RAM, không GPU**, **nâng lên model lớn hơn (7B, 13B, 70B) thường không làm nhanh hơn**, thậm chí **chậm hơn** vì inference chủ yếu chạy trên CPU, model càng lớn càng tốn tính toán mỗi token. 32GB RAM đủ cho 3B–7B (có thể 13B quantized), nhưng **tốc độ** phụ thuộc vào CPU/GPU, không phải chỉ RAM.
+
+**Gợi ý:**
+
+| Mục tiêu | Nên làm |
+|----------|---------|
+| **Chạy nhanh hơn** | Giữ 3B hoặc thử model nhỏ/gọn hơn (vd. `phi`, `qwen2.5:0.5b`, `tinyllama`); đảm bảo Ollama không treo/OOM; kiểm tra có GPU thì bật GPU cho Ollama. |
+| **Chất lượng tốt hơn, chấp nhận chậm hơn** | Có thể thử 7B quantized (vd. `llama3.2:7b`, `qwen2.5:7b-instruct-q4_0`) – chạy được trong 32GB nhưng mỗi request sẽ **chậm hơn** 3B trên CPU. |
+| **Vừa nhanh vừa chất lượng** | Cần **GPU** (vd. 1x GPU 8–24GB VRAM): khi đó 7B/8B chạy trên GPU thường nhanh hơn 3B trên CPU. Nâng RAM lên 64GB+ chỉ giúp chạy model lớn hơn, không tự làm tăng tốc. |
+
+**Kết luận:** Với 32 vCPU + 32GB RAM, **không nên** kỳ vọng “nâng model” (lên 7B/13B/70B) để **tăng tốc**. Nếu muốn nhanh: ổn định Ollama, dùng 3B hoặc model nhỏ hơn, hoặc thêm GPU. Nếu muốn chất lượng hơn và chấp nhận chậm: có thể thử 7B quantized trong 32GB.
 
 ---
 
@@ -308,6 +493,10 @@ Trong log bạn thấy:
 - **Internal discussion không xuất hiện**:
   - Có thể số lượt hỏi (`total_inferences`) quá thấp, bác sĩ kết thúc sớm trước khi tới `internal_discussion`.
   - Tăng `total_inferences` trong `config_sim.yaml` (ví dụ lên 15 hoặc 20) và chạy lại.
+
+- **Log đứng ở "~~~ prompt" / "Maria Lopez" / "preparing the consultation room..." và trong htop không thấy tiến trình Ollama**:
+  - **Nguyên nhân:** Reverie gọi LLM qua Ollama; nếu **Ollama không chạy** thì request sẽ treo (hoặc sau khi thêm timeout sẽ lỗi sau ~15s mỗi lần). Đây **không phải lỗi treo do code** mà do backend LLM chưa chạy.
+  - **Cách xử lý:** (1) Trong **terminal riêng** chạy `ollama serve` (hoặc `systemctl start ollama`) và giữ chạy. (2) Kiểm tra: `curl http://localhost:11434/api/tags` phải trả về JSON; `ps aux | grep ollama` thấy process. (3) Sau đó mới chạy `python -m medsim.simulate`. Khi chạy simulate, nếu Ollama không reachable sẽ có cảnh báo trong log. Code đã thêm connect-timeout 15s khi gọi Ollama nên nếu Ollama tắt giữa chừng, sau vài chục giây sẽ báo lỗi thay vì treo hàng giờ.
 
 ---
 

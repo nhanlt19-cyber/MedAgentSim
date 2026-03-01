@@ -176,6 +176,15 @@ def check_frontend_reachable(base_url: str, timeout: float = 3.0) -> bool:
         return False
 
 
+def check_ollama_reachable(ollama_url: str = "http://localhost:11434", timeout: float = 5.0) -> bool:
+    """Return True if Ollama is reachable (backend LLM for Reverie)."""
+    try:
+        urlopen(f"{ollama_url.rstrip('/')}/api/tags", timeout=timeout)
+        return True
+    except (URLError, OSError):
+        return False
+
+
 def open_webpage(url: str, delay: int, stop_event: threading.Event):
     """Open the simulation webpage after a delay."""
     try:
@@ -204,6 +213,13 @@ def run_scenarios(num_scenarios: int, delay: int = 5):
                 "Frontend not reachable at http://127.0.0.1:8000/. "
                 "Start it first: python -m medsim.server (keep it running)."
             )
+        if not check_ollama_reachable():
+            logger.warning(
+                "Ollama is not reachable at http://localhost:11434. "
+                "The simulation will hang when Reverie calls the LLM. Start Ollama first "
+                "(e.g. run 'ollama serve' in a terminal or systemctl start ollama), "
+                "then run this again. Check with: curl http://localhost:11434/api/tags"
+            )
         # Initialize counters
         total_scenarios = 0
         total_correct = 0
@@ -222,8 +238,8 @@ def run_scenarios(num_scenarios: int, delay: int = 5):
         for i in range(num_scenarios):
             logger.info(f"\n=== Starting Scenario {i+1}/{num_scenarios} ===")
             
-            # Update scenario index
-            update_json_file(SIMULATION_CONTROLLER_PATH, {"simulation_index": i})
+            # Update scenario index and reset diagnosis flag so Reverie can set it when DIAGNOSIS READY
+            update_json_file(SIMULATION_CONTROLLER_PATH, {"simulation_index": i, "diagnosis_ready": False})
             
             # Setup for this scenario
             target = f"scenario-{i}"

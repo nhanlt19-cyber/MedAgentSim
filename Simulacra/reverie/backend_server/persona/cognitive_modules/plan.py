@@ -927,6 +927,13 @@ def _chat_react(maze, persona, focused_event, reaction_mode, personas):
   # Khởi động hội thoại nhiều lượt; mỗi bước simulate sẽ hiện thêm 1 câu
   init_persona.scratch.start_chat(convo)
   target_persona.scratch.start_chat(convo)
+  # Nếu hội thoại đã có chẩn đoán (DIAGNOSIS READY), đánh dấu để Reverie dừng sau khi stream hết chat
+  if convo and any(
+    (isinstance(utt, (list, tuple)) and len(utt) >= 2 and "DIAGNOSIS READY" in str(utt[1]))
+    or (isinstance(utt, str) and "DIAGNOSIS READY" in utt)
+    for utt in convo
+  ):
+    set_diagnosis_ready()
   convo_summary = generate_convo_summary(init_persona, convo)
   inserted_act = convo_summary
   inserted_act_dur = duration_min
@@ -989,6 +996,22 @@ def _wait_react(persona, reaction_mode):
     act_pronunciatio, act_obj_description, act_obj_pronunciatio, act_obj_event)
   
 
+def set_diagnosis_ready():
+  """Ghi cờ diagnosis_ready vào simulation_controller.json để Reverie dừng sau khi stream hết chat."""
+  current_file_dir = os.path.dirname(os.path.abspath(__file__))
+  json_file_path = os.path.join(current_file_dir, "../..", "simulation_controller.json")
+  json_file_path = os.path.normpath(json_file_path)
+  try:
+    with open(json_file_path, 'r') as file:
+      data = json.load(file)
+    data["diagnosis_ready"] = True
+    with open(json_file_path, 'w') as file:
+      json.dump(data, file, indent=4)
+  except Exception as e:
+    if debug:
+      print(f"(plan) set_diagnosis_ready failed: {e}")
+
+
 def set_simulation_inactive():
   current_file_dir = os.path.dirname(os.path.abspath(__file__))
   json_file_path = os.path.join(current_file_dir, "../..", "simulation_controller.json")
@@ -998,7 +1021,7 @@ def set_simulation_inactive():
   with open(json_file_path, 'r') as file:
     data = json.load(file)
 
-  # Update or set the "simulation_active" value to 1
+  # Update or set the "simulation_active" value to 0
   data["simulation_active"] = 0
 
   # Save the JSON data (either new or updated) back to the file

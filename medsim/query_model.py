@@ -181,8 +181,12 @@ class BAgent:
         - Một số bản Ollama chỉ hỗ trợ `/api/generate`.
         - Bản mới hơn hỗ trợ thêm `/api/chat` hoặc `/v1/chat/completions` (OpenAI-compatible).
         - Hàm này sẽ thử lần lượt: `/v1/chat/completions` → `/api/chat` → `/api/generate`.
+        - Dùng (connect_timeout, read_timeout) để khi Ollama không chạy thì fail nhanh (~15s), tránh treo vô hạn.
         """
         headers = {"Content-Type": "application/json"}
+        connect_timeout = 15  # Nếu Ollama không chạy, kết nối sẽ fail trong 15s
+        read_timeout = min(120, max(30, int(timeout)))
+        request_timeout = (connect_timeout, read_timeout)
 
         # Danh sách endpoint thử lần lượt: (chế_độ, URL)
         endpoints = [
@@ -217,7 +221,7 @@ class BAgent:
                             }
 
                         response = requests.post(
-                            url, headers=headers, json=payload, timeout=timeout
+                            url, headers=headers, json=payload, timeout=request_timeout
                         )
                         # Nếu endpoint không tồn tại, thử endpoint tiếp theo
                         if response.status_code == 404:
@@ -259,7 +263,7 @@ class BAgent:
                             },
                         }
                         response = requests.post(
-                            url, headers=headers, json=payload, timeout=timeout
+                            url, headers=headers, json=payload, timeout=request_timeout
                         )
                         if response.status_code == 404:
                             last_error = requests.HTTPError(

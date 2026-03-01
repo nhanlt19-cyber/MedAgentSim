@@ -699,6 +699,61 @@ def generate_poig_score(persona, event_type, description):
 
 ---
 
+### 1.19. Dừng simulation khi đã đưa ra chẩn đoán (DIAGNOSIS READY)
+
+**Mục đích:** Trước đây Reverie chạy đủ số step tối đa (vd. 300) dù sau khi hội thoại đã có "DIAGNOSIS READY", gây lãng phí thời gian và tài nguyên LLM. Cần **dừng sớm** khi (1) đã có chẩn đoán và (2) đã stream hết hội thoại ra frontend (chunked chat đã phát đủ).
+
+**File đã sửa:**
+
+- `Simulacra/reverie/backend_server/persona/cognitive_modules/plan.py`
+- `Simulacra/reverie/backend_server/reverie.py`
+- `medsim/simulate/__main__.py`
+
+**Thay đổi:**
+
+1. **plan.py**
+   - Thêm hàm `set_diagnosis_ready()`: ghi `diagnosis_ready: true` vào `simulation_controller.json`.
+   - Trong `_chat_react`, sau khi gọi `start_chat(convo)`, nếu trong `convo` có bất kỳ lượt thoại nào chứa chuỗi `"DIAGNOSIS READY"` (trong `utt[1]`), gọi `set_diagnosis_ready()`.
+
+2. **reverie.py**
+   - Thêm method `set_simulation_inactive(self, json_file_path)` để ghi `simulation_active = 0` vào file controller.
+   - Trong vòng lặp `start_server`, sau mỗi step (sau khi ghi `movement/<step>.json` và tăng `step`): đọc `simulation_controller.json`, nếu `diagnosis_ready` và với ít nhất một persona có `chat_full` và `chat_step_idx >= len(chat_full)` (đã stream hết hội thoại), gọi `self.set_simulation_inactive(ctrl_path)` để vòng lặp dừng ở lần kiểm tra tiếp theo.
+
+3. **medsim/simulate/__main__.py**
+   - Khi bắt đầu mỗi scenario, gọi `update_json_file(SIMULATION_CONTROLLER_PATH, {"simulation_index": i, "diagnosis_ready": False})` để reset cờ cho scenario mới.
+
+**Ảnh hưởng:**
+
+- Sau khi bác sĩ đưa ra chẩn đoán (nội dung hội thoại có "DIAGNOSIS READY") và frontend đã nhận đủ toàn bộ hội thoại (chunked chat đã phát hết), Reverie dừng thay vì chạy thêm hàng trăm step (sector, arena, …). Tiết kiệm thời gian và số lần gọi LLM.
+- Log backend sẽ không còn in dài dòng "Maria Lopez is currently in {Hospital}...", "GNS FUNCTION: <generate_action_arena>", v.v. sau khi đã xong cuộc trò chuyện.
+
+---
+
+### 1.20. Tránh treo khi Ollama không chạy (connect timeout + kiểm tra trước khi simulate)
+
+**Mục đích:** Khi Ollama không chạy (hoặc tắt giữa chừng), Reverie gọi `backend.query_model()` → request tới `localhost:11434` treo. Trong htop không thấy tiến trình Ollama; log đứng ở "~~~ prompt". Cần fail nhanh (timeout) và cảnh báo rõ để người dùng biết phải bật Ollama trước.
+
+**File đã sửa:**
+
+- `medsim/query_model.py`
+- `medsim/simulate/__main__.py`
+
+**Thay đổi:**
+
+1. **medsim/query_model.py** – `_query_ollama`  
+   - Dùng `timeout=(connect_timeout, read_timeout)` với **connect_timeout=15** giây cho mọi `requests.post` tới Ollama. Nếu Ollama không chạy, kết nối sẽ fail sau ~15s (thay vì treo lâu hoặc phụ thuộc mặc định của thư viện). Read timeout giữ tối đa 120s (hoặc theo tham số `timeout`).
+
+2. **medsim/simulate/__main__.py**  
+   - Thêm `check_ollama_reachable(ollama_url, timeout=5)` (gọi `GET .../api/tags`).  
+   - Trong `run_scenarios`, trước khi chạy scenario, gọi kiểm tra này; nếu không reachable thì ghi **log cảnh báo** rõ: Ollama không reachable, simulation có thể treo khi Reverie gọi LLM, cần chạy `ollama serve` (hoặc `systemctl start ollama`) và kiểm tra `curl http://localhost:11434/api/tags`.
+
+**Ảnh hưởng:**
+
+- Khi Ollama tắt: sau khoảng 15s mỗi lần gọi LLM sẽ lỗi (ConnectionError/Timeout), retry rồi trả về thông báo lỗi thay vì treo hàng giờ.  
+- Khi chạy `python -m medsim.simulate` mà chưa bật Ollama: log sẽ có cảnh báo ngay từ đầu, nhắc bật Ollama và cách kiểm tra.
+
+---
+
 ## 2. Các README mới/bổ sung (tài liệu, không ảnh hưởng code)
 
 Các file README này **chỉ là tài liệu tham khảo**, không làm thay đổi hành vi chạy của chương trình.

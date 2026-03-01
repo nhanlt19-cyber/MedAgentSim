@@ -340,6 +340,16 @@ class ReverieServer:
       print(f"An error occurred: {e}")
       return False
 
+  def set_simulation_inactive(self, json_file_path):
+    """Set simulation_active to 0 so the main loop stops (e.g. after diagnosis + chat streamed)."""
+    try:
+      with open(json_file_path, 'r') as file:
+        data = json.load(file)
+      data["simulation_active"] = 0
+      with open(json_file_path, 'w') as file:
+        json.dump(data, file, indent=4)
+    except Exception as e:
+      print(f"(reverie) set_simulation_inactive failed: {e}")
 
   def start_server(self, int_counter): 
     """
@@ -479,6 +489,25 @@ class ReverieServer:
           # current time moves by <sec_per_step> amount. 
           self.step += 1
           self.curr_time += datetime.timedelta(seconds=self.sec_per_step)
+
+          # Dừng sớm khi đã có chẩn đoán và đã stream hết hội thoại ra frontend
+          try:
+            ctrl_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "simulation_controller.json")
+            if os.path.exists(ctrl_path):
+              with open(ctrl_path, "r") as f:
+                ctrl = json.load(f)
+              if ctrl.get("diagnosis_ready"):
+                chat_streamed = False
+                for p in self.personas.values():
+                  cf = getattr(p.scratch, "chat_full", None)
+                  idx = getattr(p.scratch, "chat_step_idx", 0)
+                  if cf is not None and len(cf) > 0 and idx >= len(cf):
+                    chat_streamed = True
+                    break
+                if chat_streamed:
+                  self.set_simulation_inactive(ctrl_path)
+          except Exception:
+            pass
 
           int_counter -= 1
       # Sleep so we don't burn our machines. 
