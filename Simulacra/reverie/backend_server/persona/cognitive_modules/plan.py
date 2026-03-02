@@ -926,18 +926,19 @@ def _chat_react(maze, persona, focused_event, reaction_mode, personas):
   convo, duration_min = generate_convo(maze, init_persona, target_persona)
 
   # Thử căn lại vị trí doctor / patient quanh bàn khám để trông tự nhiên hơn.
-  # Giả định: khi bắt đầu chat, cả hai đã ở gần bàn khám, nên ta "snap" họ
-  # vào hai ô đối xứng qua trục dọc (doctor bên trái bàn, patient bên phải).
+  # Với scenario bệnh viện hiện tại, ta hard-code toạ độ ghế ước lượng:
+  # Doctor (Maria Lopez) ở bên trái bàn, Patient (Klaus Mueller) ở bên phải.
   try:
-    d_x, d_y = init_persona.scratch.curr_tile
-    p_x, p_y = target_persona.scratch.curr_tile
-    mid_x = int(round((d_x + p_x) / 2.0))
-    mid_y = int(round((d_y + p_y) / 2.0))
-    # Doctor ngồi bên trái bàn, patient bên phải
-    doctor_seat = [mid_x - 1, mid_y]
-    patient_seat = [mid_x + 1, mid_y]
-    init_persona.scratch.curr_tile = doctor_seat
-    target_persona.scratch.curr_tile = patient_seat
+    if init_persona.name == "Maria Lopez" and target_persona.name == "Klaus Mueller":
+      doctor_seat = [47, 24]
+      patient_seat = [49, 24]
+      init_persona.scratch.curr_tile = doctor_seat
+      target_persona.scratch.curr_tile = patient_seat
+    elif init_persona.name == "Klaus Mueller" and target_persona.name == "Maria Lopez":
+      doctor_seat = [47, 24]
+      patient_seat = [49, 24]
+      target_persona.scratch.curr_tile = doctor_seat
+      init_persona.scratch.curr_tile = patient_seat
   except Exception:
     # Nếu có lỗi (thiếu curr_tile, v.v.) thì bỏ qua, dùng vị trí mặc định.
     pass
