@@ -153,6 +153,66 @@ Nếu có lỗi:
    - **http://127.0.0.1:8000/replay/&lt;sim_code&gt;/&lt;step&gt;**
    Ví dụ: `http://127.0.0.1:8000/replay/scenario_0/10` — frontend sẽ đọc `storage/scenario_0/movement/10.json` và hiển thị (map + chat) tại bước đó, không cần chạy Reverie lại.
 
+### 3.2. Lấy dữ liệu từ server khác để test frontend tại máy mình
+
+Khi bạn chạy simulation trên **một server khác** (đã lưu log / storage), có thể copy dữ liệu về máy hiện tại để lần sau chỉ cần chạy frontend và xem replay, không cần chạy lại simulation.
+
+**Bước 1 — Trên server đã chạy simulation**
+
+- Xác định **sim_code** (ví dụ `scenario_0`, `scenario_1`, hoặc tên in trong log khi chạy `medsim.simulate`).
+- Đường dẫn thư mục cần copy (tính từ thư mục gốc project MedAgentSim):
+  - **`Simulacra/environment/frontend_server/storage/<sim_code>/`**
+- Trong đó cần có ít nhất:
+  - **`movement/`** — các file `0.json`, `1.json`, … (càng nhiều step càng xem được nhiều bước).
+  - **`environment/`** — ít nhất một file `N.json` (vị trí nhân vật; thường có sẵn sau khi chạy).
+  - **`personas/`** — mỗi nhân vật một thư mục (tên đúng với trong movement, ví dụ `Maria Lopez`, `Klaus Mueller`); mỗi thư mục có thể để trống hoặc có `bootstrap_memory/` nếu bạn muốn mở link "State Details".
+
+**Cách copy:**
+
+- **Cách A — Đóng gói trên server rồi tải về**  
+  Trên server (trong thư mục gốc MedAgentSim):
+
+  ```bash
+  # Tạo file nén (thay scenario_0 bằng sim_code của bạn)
+  tar -czvf storage_scenario_0.tar.gz -C Simulacra/environment/frontend_server/storage scenario_0
+  ```
+
+  Tải file `storage_scenario_0.tar.gz` về máy (scp, USB, cloud…). Trên máy mình, giải nén vào đúng chỗ (xem Bước 2).
+
+- **Cách B — Dùng script có sẵn**  
+  Trên server, trong thư mục gốc MedAgentSim:
+
+  ```bash
+  python tools/pack_storage_for_replay.py scenario_0
+  ```
+
+  Script sẽ tạo `storage_scenario_0.tar.gz` trong thư mục hiện tại. Tải file đó về máy mình.
+
+**Bước 2 — Trên máy muốn test frontend**
+
+- Đảm bảo đã có thư mục:
+  - **`MedAgentSim/Simulacra/environment/frontend_server/storage/`**
+- Giải nén (hoặc copy) sao cho xuất hiện:
+  - **`Simulacra/environment/frontend_server/storage/<sim_code>/`**  
+  với các thư mục con `movement/`, `environment/`, `personas/`.
+
+  Ví dụ nếu dùng `tar`:
+
+  ```bash
+  cd MedAgentSim
+  tar -xzvf storage_scenario_0.tar.gz -C Simulacra/environment/frontend_server/storage
+  ```
+
+  Hoặc giải nén xong copy thư mục `scenario_0` vào `Simulacra/environment/frontend_server/storage/`.
+
+**Bước 3 — Chạy frontend và xem replay**
+
+- Chạy: `python -m medsim.server`
+- Mở trình duyệt: **http://127.0.0.1:8000/replay/&lt;sim_code&gt;/&lt;step&gt;**  
+  Ví dụ: `http://127.0.0.1:8000/replay/scenario_0/5` (step = 5 nếu đã có file `movement/5.json`).
+
+Như vậy bạn có thể chạy simulation một lần trên server mạnh, lưu storage, rồi mang về máy khác chỉ để chỉnh frontend và xem replay cho nhanh.
+
 ---
 
 ## 4. Bước 2 – Chạy controller mô phỏng (`medsim.simulate`)
