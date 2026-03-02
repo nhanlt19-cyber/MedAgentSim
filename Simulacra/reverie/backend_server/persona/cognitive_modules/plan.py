@@ -927,14 +927,15 @@ def _chat_react(maze, persona, focused_event, reaction_mode, personas):
 
   # Thử căn lại vị trí doctor / patient quanh bàn khám để trông tự nhiên hơn.
   # Giả định: khi bắt đầu chat, cả hai đã ở gần bàn khám, nên ta "snap" họ
-  # vào hai ô đối xứng qua trục ngang (doctor phía trên, patient phía dưới).
+  # vào hai ô đối xứng qua trục dọc (doctor bên trái bàn, patient bên phải).
   try:
     d_x, d_y = init_persona.scratch.curr_tile
     p_x, p_y = target_persona.scratch.curr_tile
     mid_x = int(round((d_x + p_x) / 2.0))
     mid_y = int(round((d_y + p_y) / 2.0))
-    doctor_seat = [mid_x, mid_y - 1]
-    patient_seat = [mid_x, mid_y + 1]
+    # Doctor ngồi bên trái bàn, patient bên phải
+    doctor_seat = [mid_x - 1, mid_y]
+    patient_seat = [mid_x + 1, mid_y]
     init_persona.scratch.curr_tile = doctor_seat
     target_persona.scratch.curr_tile = patient_seat
   except Exception:
