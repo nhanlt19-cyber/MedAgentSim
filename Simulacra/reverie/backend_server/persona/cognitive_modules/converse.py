@@ -329,11 +329,21 @@ def extract_speaker_text(json_path, doc_name, pat_name):
         corrected_conversations = deduplicated_conversations
                     
         # Process last element to remove "DIAGNOSIS READY:" section
+        had_diagnosis = False
         last_speaker, last_text = corrected_conversations[-1]
         diagnosis_pattern = re.search(r"DIAGNOSIS READY:.*?\n\n", last_text, re.DOTALL)
         if diagnosis_pattern:
             last_text = last_text.replace(diagnosis_pattern.group(), "").strip()
             corrected_conversations[-1] = [last_speaker, last_text]
+            had_diagnosis = True
+
+        # Nếu có chẩn đoán, thêm một lời cảm ơn tự nhiên từ bệnh nhân để kết thúc cuộc trò chuyện
+        if had_diagnosis and corrected_conversations:
+            thanks_text = (
+                f"Thank you, {doc_name}. I appreciate you explaining everything and helping me "
+                f"understand my condition. I'll follow your recommendations and head back home now."
+            )
+            corrected_conversations.append([pat_name, thanks_text])
 
         return corrected_conversations
 

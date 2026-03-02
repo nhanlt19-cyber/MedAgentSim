@@ -490,7 +490,9 @@ class ReverieServer:
           self.step += 1
           self.curr_time += datetime.timedelta(seconds=self.sec_per_step)
 
-          # Dừng sớm khi đã có chẩn đoán và đã stream hết hội thoại ra frontend
+          # Sau khi đã có chẩn đoán và stream hết hội thoại ra frontend,
+          # cho phép mô phỏng chạy thêm một số bước để bệnh nhân / bác sĩ
+          # có thể rời khỏi phòng (trông tự nhiên hơn) rồi mới dừng hẳn.
           try:
             ctrl_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "simulation_controller.json")
             if os.path.exists(ctrl_path):
@@ -504,8 +506,16 @@ class ReverieServer:
                   if cf is not None and len(cf) > 0 and idx >= len(cf):
                     chat_streamed = True
                     break
+                # Nếu đã phát xong toàn bộ hội thoại, đặt mốc dừng sau N bước
                 if chat_streamed:
-                  self.set_simulation_inactive(ctrl_path)
+                  extra_steps = ctrl.get("extra_steps_after_chat", 40)
+                  stop_at_step = ctrl.get("stop_at_step")
+                  if stop_at_step is None:
+                    ctrl["stop_at_step"] = self.step + int(extra_steps)
+                    with open(ctrl_path, "w") as f:
+                      json.dump(ctrl, f, indent=2)
+                  elif self.step >= stop_at_step:
+                    self.set_simulation_inactive(ctrl_path)
           except Exception:
             pass
 
