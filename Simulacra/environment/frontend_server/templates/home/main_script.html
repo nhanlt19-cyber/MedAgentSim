@@ -543,15 +543,17 @@
 	    if (execute_count == execute_count_max) { 
 	      // Thứ tự persona: phần tử đầu = doctor (bong bóng trái), thứ hai = patient (bong bóng phải)
 	      let persona_key_list = Object.keys(personas);
+	      let globalChatContent = "";
+
 	      for (let i=0; i<persona_key_list.length; i++) {
 	        let curr_persona_name = persona_key_list[i];
 	        let curr_persona_name_os = curr_persona_name.replace(/ /g,"_");
 	        let description_content = execute_movement["persona"][curr_persona_name]["description"];
-	        let chat_content = "";
 
-	        // MedAgentSim: hiển thị toàn bộ hội thoại theo thứ tự doctor => patient => doctor, có thể cuộn xem lịch sử
-	        if (execute_movement["persona"][curr_persona_name]["chat"] != null ){
+	        // Lấy hội thoại global từ persona đầu tiên có chat != null
+	        if (!globalChatContent && execute_movement["persona"][curr_persona_name]["chat"] != null ){
 		        let chat_list = execute_movement["persona"][curr_persona_name]["chat"];
+		        let chat_content = "";
 		        for (let j=0; j<chat_list.length; j++) {
 		          let speaker = chat_list[j][0];
 		          let text = chat_list[j][1];
@@ -561,24 +563,25 @@
 		          let label = isFirstPersona ? "Doctor" : "Patient";
 		          chat_content += "<div class=\"" + bubbleClass + "\"><strong>" + label + ":</strong> " + escapeHtml(text) + "</div>";
 		        }
-		        if (chat_content === "") chat_content = "<em>None at the moment</em>";
-		      } else {
-		      	chat_content = "<em>None at the moment</em>";
+		        globalChatContent = chat_content;
 		      }
 
-	        // Nếu persona này không có khung UI (vd. replay chỉ để khung đầu), bỏ qua để tránh lỗi null
+	        // Cập nhật thông tin action/location cho từng persona nếu có khung UI
 	        let actionEl = document.getElementById("current_action__"+curr_persona_name_os);
 	        let locEl = document.getElementById("target_address__"+curr_persona_name_os);
-	        let chatEl = document.getElementById("chat__"+curr_persona_name_os);
-	        if (!actionEl || !locEl || !chatEl) {
-	          continue;
+	        if (actionEl && locEl) {
+	          actionEl.innerHTML = description_content.split("@")[0];
+	          locEl.innerHTML = description_content.split("@")[1];
 	        }
-
-	        actionEl.innerHTML = description_content.split("@")[0];
-	        locEl.innerHTML = description_content.split("@")[1];
-	        chatEl.innerHTML = chat_content;
 	      }
-	      
+
+	      // Ghi hội thoại vào khung global nếu đã có ít nhất một lượt chat
+	      if (globalChatContent) {
+	        let globalChatEl = document.getElementById("chat__global");
+	        if (globalChatEl) {
+	          globalChatEl.innerHTML = globalChatContent;
+	        }
+	      }
 	    }
 
 	    execute_count = execute_count - 1;
