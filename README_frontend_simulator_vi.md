@@ -134,6 +134,25 @@ Nếu có lỗi:
 - Kiểm tra lại đường dẫn `Simulacra/environment/frontend_server` có tồn tại không.
 - Cài đặt phụ thuộc Django nếu thiếu (theo README gốc, ví dụ `pip install django==2.2`).
 
+### 3.1. Test nhanh frontend (không cần chạy full simulation)
+
+Để tiết kiệm thời gian khi chỉnh sửa giao diện (CSS, layout khung chat, v.v.) mà **không cần chạy lại simulation**:
+
+1. **Trang test chat (chỉ cần Django)**  
+   Chạy frontend: `python -m medsim.server`, rồi mở trong trình duyệt:
+   - **http://127.0.0.1:8000/test_chat_ui**
+   Trang này hiển thị khung hội thoại với dữ liệu mẫu (doctor ⇄ patient), dùng đúng CSS/layout của "Current Conversation". Không cần Reverie hay `medsim.simulate`.
+
+2. **File HTML standalone (không cần server)**  
+   Mở trực tiếp file sau trong trình duyệt (double-click hoặc `file:///...`):
+   - **`tools/test_chat_standalone.html`**
+   Dùng để xem nhanh giao diện bong bóng chat, có thể sửa file này để thử CSS/nội dung.
+
+3. **Replay với dữ liệu đã chạy trước đó**  
+   Nếu đã từng chạy simulation và có thư mục `storage/<sim_code>/movement/*.json` (ví dụ `storage/scenario_0/` sau một lần chạy MedAgentSim), chỉ cần chạy Django rồi mở:
+   - **http://127.0.0.1:8000/replay/&lt;sim_code&gt;/&lt;step&gt;**
+   Ví dụ: `http://127.0.0.1:8000/replay/scenario_0/10` — frontend sẽ đọc `storage/scenario_0/movement/10.json` và hiển thị (map + chat) tại bước đó, không cần chạy Reverie lại.
+
 ---
 
 ## 4. Bước 2 – Chạy controller mô phỏng (`medsim.simulate`)

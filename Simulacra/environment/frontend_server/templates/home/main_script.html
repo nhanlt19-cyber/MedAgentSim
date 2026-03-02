@@ -26,6 +26,12 @@
 	// ###########################################################################
 	// PREAMBLE
 	// ###########################################################################
+	function escapeHtml(text) {
+	  if (!text) return "";
+	  var div = document.createElement("div");
+	  div.textContent = text;
+	  return div.innerHTML;
+	}
 
 	// <step> -- one full loop around all three phases determined by <phase> is 
 	// a step. We use this to link the steps in the backend. 
@@ -535,28 +541,30 @@
 
 	    // Filling in the action description. 
 	    if (execute_count == execute_count_max) { 
-	      for (let i=0; i<Object.keys(personas).length; i++) {
-	      	let action_description = ""
-	        let curr_persona_name = Object.keys(personas)[i];
+	      // Thứ tự persona: phần tử đầu = doctor (bong bóng trái), thứ hai = patient (bong bóng phải)
+	      let persona_key_list = Object.keys(personas);
+	      for (let i=0; i<persona_key_list.length; i++) {
+	        let curr_persona_name = persona_key_list[i];
 	        let curr_persona_name_os = curr_persona_name.replace(/ /g,"_");
 	        let description_content = execute_movement["persona"][curr_persona_name]["description"];
-	        let chat_content = ""
+	        let chat_content = "";
 
-	        // MedAgentSim: mỗi agent chỉ hiển thị phần thoại của chính mình (doctor chỉ câu hỏi, patient chỉ câu trả lời)
+	        // MedAgentSim: hiển thị toàn bộ hội thoại theo thứ tự doctor => patient => doctor, có thể cuộn xem lịch sử
 	        if (execute_movement["persona"][curr_persona_name]["chat"] != null ){
 		        let chat_list = execute_movement["persona"][curr_persona_name]["chat"];
 		        for (let j=0; j<chat_list.length; j++) {
 		          let speaker = chat_list[j][0];
 		          let text = chat_list[j][1];
-		          if (speaker === curr_persona_name) {
-		            chat_content += speaker + ": " + text + "<br>";
-		          }
+		          // Bong bóng trái (doctor) = persona đầu tiên, bong bóng phải (patient) = persona thứ hai
+		          let isFirstPersona = (speaker === persona_key_list[0]);
+		          let bubbleClass = isFirstPersona ? "chat-bubble chat-bubble-left" : "chat-bubble chat-bubble-right";
+		          let label = isFirstPersona ? "Doctor" : "Patient";
+		          chat_content += "<div class=\"" + bubbleClass + "\"><strong>" + label + ":</strong> " + escapeHtml(text) + "</div>";
 		        }
 		        if (chat_content === "") chat_content = "<em>None at the moment</em>";
 		      } else {
-		      	chat_content = "<em>None at the moment</em>"
+		      	chat_content = "<em>None at the moment</em>";
 		      }
-	        // action_description += description_content + "<br>";
 
 	        document.getElementById("current_action__"+curr_persona_name_os).innerHTML = description_content.split("@")[0];
 	        document.getElementById("target_address__"+curr_persona_name_os).innerHTML = description_content.split("@")[1];

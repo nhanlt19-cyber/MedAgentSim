@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% load staticfiles %}
+{% block content %}
+<style>
+  .chat-bubble { margin: 6px 0; padding: 8px 12px; border-radius: 12px; max-width: 92%; display: block; }
+  .chat-bubble-left { background: #fff; border: 1px solid #dee2e6; text-align: left; margin-right: auto; }
+  .chat-bubble-right { background: #d4edda; border: 1px solid #c3e6cb; text-align: right; margin-left: auto; }
+  .chat-convo-container::-webkit-scrollbar { width: 8px; }
+  .chat-convo-container::-webkit-scrollbar-track { background: #eee; border-radius: 4px; }
+  .chat-convo-container::-webkit-scrollbar-thumb { background: #bbb; border-radius: 4px; }
+</style>
+<div style="max-width: 800px; margin: 2em auto; padding: 0 1em;">
+  <h2>Test UI — Khung hội thoại (không cần simulation)</h2>
+  <p style="color:#666;">Trang này dùng để test nhanh giao diện chat. Chỉ cần chạy Django (<code>python -m medsim.server</code>), không cần backend Reverie.</p>
+  <hr>
+  {% for p_name, p_name_os in persona_names %}
+  <div class="media" style="background-color:#EEEEEE; padding:1em; padding-left:3.5em; padding-right:2em; border-radius:10px; margin-bottom:1.5em;">
+    <div class="media-left media-middle">
+      <img class="media-object" src="{% static 'img/atlas.png' %}" style="width:5em" alt="">
+    </div>
+    <div class="media-body" style="padding-left:3em; padding-top:0.5em; padding-bottom:1em">
+      <h2 style="margin-bottom:0.8em; font-size:1.85em;">{{ p_name }}</h2>
+      <p style="font-size:1.2em;"><strong>Current Conversation:</strong></p>
+      <div class="chat-convo-container" style="max-height:280px; overflow-y:auto; padding:8px; background:#f8f9fa; border-radius:8px; border:1px solid #dee2e6;">
+        {% for speaker, text in sample_chat %}
+          {% if speaker == "Maria Lopez" %}
+        <div class="chat-bubble chat-bubble-left"><strong>Doctor:</strong> {{ text }}</div>
+          {% else %}
+        <div class="chat-bubble chat-bubble-right"><strong>Patient:</strong> {{ text }}</div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+  <p style="margin-top:2em; font-size:0.9em; color:#888;">
+    Để test với dữ liệu thật từ một lần chạy simulation trước đó: dùng <strong>Replay</strong> — chạy Django rồi mở <code>/replay/&lt;sim_code&gt;/&lt;step&gt;</code> (cần có thư mục <code>storage/&lt;sim_code&gt;/movement/</code>).
+  </p>
+</div>
+{% endblock content %}

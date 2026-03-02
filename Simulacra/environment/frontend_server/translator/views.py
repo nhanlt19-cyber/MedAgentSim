@@ -25,6 +25,28 @@ def landing(request):
   return render(request, template, context)
 
 
+def test_chat_ui(request):
+  """
+  Trang test nhanh chỉ giao diện hội thoại (chat) — không cần chạy simulation.
+  Dùng để kiểm tra CSS/layout của khung Current Conversation mà không cần backend Reverie.
+  Mở: http://127.0.0.1:8000/test_chat_ui (chỉ cần chạy Django: python -m medsim.server)
+  """
+  # Dữ liệu mẫu doctor => patient => doctor (giống format từ movement JSON)
+  sample_chat = [
+    ["Maria Lopez", "Bạn có thể mô tả chi tiết hơn về các triệu chứng đau đầu và mờ mắt không? Chúng xuất hiện khi nào?"],
+    ["Klaus Mueller", "Đau đầu thường vào buổi sáng, đôi khi kèm mờ mắt. Tôi cũng thấy khó leo cầu thang và yếu tay."],
+    ["Maria Lopez", "Bạn đã từng làm xét nghiệm hoặc chụp hình ảnh nào như X-quang ngực hay CT chưa, và bạn có sẵn sàng làm thêm nếu tôi đề xuất không?"],
+  ]
+  context = {
+    "persona_names": [
+      ("Maria Lopez", "Maria_Lopez"),
+      ("Klaus Mueller", "Klaus_Mueller"),
+    ],
+    "sample_chat": sample_chat,
+  }
+  return render(request, "home/test_chat_ui.html", context)
+
+
 def demo(request, sim_code, step, play_speed="2"): 
   move_file = f"compressed_storage/{sim_code}/master_movement.json"
   meta_file = f"compressed_storage/{sim_code}/meta.json"
