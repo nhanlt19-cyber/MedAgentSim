@@ -787,6 +787,9 @@ def run_gpt_prompt_action_arena(action_description,
   # để đảm bảo cả doctor và patient gặp nhau tại phòng này (cho mục đích demo).
   output = "Dentistry Consultation Room"
 
+  # Giữ cấu trúc return cũ (cần biến fail_safe)
+  fail_safe = get_fail_safe()
+
   if debug or verbose: 
     print_run_prompts(prompt_template, persona, gpt_param, 
                       prompt_input, prompt, output)
