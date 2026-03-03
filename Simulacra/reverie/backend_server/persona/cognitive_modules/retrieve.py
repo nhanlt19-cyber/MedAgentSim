@@ -53,23 +53,26 @@ def retrieve(persona, perceived):
 
 def cos_sim(a, b): 
   """
-  This function calculates the cosine similarity between two input vectors 
-  'a' and 'b'. Cosine similarity is a measure of similarity between two 
-  non-zero vectors of an inner product space that measures the cosine 
-  of the angle between them.
+  Cosine similarity between 2 vectors with safety checks.
 
-  INPUT: 
-    a: 1-D array object 
-    b: 1-D array object 
-  OUTPUT: 
-    A scalar value representing the cosine similarity between the input 
-    vectors 'a' and 'b'.
-  
-  Example input: 
-    a = [0.3, 0.2, 0.5]
-    b = [0.2, 0.2, 0.5]
+  Trả về 0.0 nếu:
+  - Một trong hai vector là None
+  - Norm của một trong hai bằng 0
+  - Có lỗi kiểu dữ liệu khi tính toán
   """
-  return dot(a, b)/(norm(a)*norm(b))
+  if a is None or b is None:
+    return 0.0
+  try:
+    na = norm(a)
+    nb = norm(b)
+  except Exception:
+    return 0.0
+  if na == 0 or nb == 0:
+    return 0.0
+  try:
+    return float(dot(a, b) / (na * nb))
+  except Exception:
+    return 0.0
 
 
 def normalize_dict_floats(d, target_min, target_max):
@@ -195,7 +198,8 @@ def extract_relevance(persona, nodes, focal_pt):
 
   relevance_out = dict()
   for count, node in enumerate(nodes): 
-    node_embedding = persona.a_mem.embeddings[node.embedding_key]
+    node_embedding = persona.a_mem.embeddings.get(node.embedding_key)
+    # Nếu thiếu embedding (None) thì cho relevance = 0
     relevance_out[node.node_id] = cos_sim(node_embedding, focal_embedding)
 
   return relevance_out
