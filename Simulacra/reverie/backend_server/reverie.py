@@ -86,17 +86,24 @@ class ReverieServer:
     # The start datetime of the Reverie: 
     # <start_datetime> is the datetime instance for the start datetime of 
     # the Reverie instance. Once it is set, this is not really meant to 
-    # change. It takes a string date in the following example form: 
-    # "June 25, 2022"
-    # e.g., ...strptime(June 25, 2022, "%B %d, %Y")
-    self.start_time = datetime.datetime.strptime(
+    # change. The original meta.json stores an absolute calendar date
+    # (e.g., "June 25, 2022"), but for new simulations we want the
+    # displayed date in the UI to always reflect "today".
+    #
+    # Vì vậy, ta lấy lại giờ trong meta (time-of-day) nhưng gắn với
+    # ngày hiện tại (today) để game time trông tự nhiên hơn.
+    orig_start = datetime.datetime.strptime(
                         f"{reverie_meta['start_date']}, 00:00:00",  
                         "%B %d, %Y, %H:%M:%S")
+    orig_curr = datetime.datetime.strptime(
+                        reverie_meta['curr_time'], 
+                        "%B %d, %Y, %H:%M:%S")
+    today = datetime.date.today()
+    self.start_time = datetime.datetime.combine(today, orig_start.time())
     # <curr_time> is the datetime instance that indicates the game's current
     # time. This gets incremented by <sec_per_step> amount everytime the world
     # progresses (that is, everytime curr_env_file is recieved). 
-    self.curr_time = datetime.datetime.strptime(reverie_meta['curr_time'], 
-                                                "%B %d, %Y, %H:%M:%S")
+    self.curr_time = datetime.datetime.combine(today, orig_curr.time())
     # <sec_per_step> denotes the number of seconds in game time that each 
     # step moves foward. 
     self.sec_per_step = reverie_meta['sec_per_step']

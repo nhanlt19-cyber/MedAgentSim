@@ -9,6 +9,8 @@ import re
 import datetime
 import sys
 import ast
+import random
+import string
 
 sys.path.append('../../')
 
@@ -758,18 +760,13 @@ def run_gpt_prompt_action_arena(action_description,
   prompt = generate_prompt(prompt_input, prompt_template)
 
   fail_safe = get_fail_safe()
-  # output = safe_generate_response(prompt, gpt_param, 5, fail_safe,
-  #                                  __func_validate, __func_clean_up)
-  # logger.info (output)
-  # # output = "{Dentistry Consultation Room"
-  # logger.info("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-  # y = f"{act_world}:{act_sector}"
-  # x = [i.strip() for i in persona.s_mem.get_str_accessible_sector_arenas(y).split(",")]
-  # if output not in x: 
-  #   output = random.choice(x)
-  output = "Dentistry Consultation Room"
-  # output = "Triage Station"
-  # print(output)
+  output = safe_generate_response(prompt, gpt_param, 5, fail_safe,
+                                   __func_validate, __func_clean_up)
+
+  y = f"{act_world}:{act_sector}"
+  x = [i.strip() for i in persona.s_mem.get_str_accessible_sector_arenas(y).split(",")]
+  if output not in x and len(x) > 0:
+    output = random.choice(x)
 
   if debug or verbose: 
     print_run_prompts(prompt_template, persona, gpt_param, 
