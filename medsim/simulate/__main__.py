@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Dict, Any, Type
 from urllib.request import urlopen
 from urllib.error import URLError
+import calendar
 
 # Configure logging
 logging.basicConfig(
@@ -115,9 +116,67 @@ def update_json_file(file_path: Path, updates: Dict[str, Any]):
         logger.error(f"Failed to update JSON file {file_path}: {e}")
         return False
 
+
+def _today_date_str() -> str:
+    """Return today's date in 'Month D, YYYY' (no leading zero)."""
+    now = datetime.now()
+    month = calendar.month_name[now.month]
+    return f"{month} {now.day}, {now.year}"
+
+
+def _patch_origin_meta_date(origin_sim_code: str = "test-simulation") -> None:
+    """
+    Ensure origin simulation meta uses today's date so the UI shows current year.
+
+    This patches:
+      Simulacra/environment/frontend_server/storage/<origin>/reverie/meta.json
+    - start_date -> today's date
+    - curr_time  -> today's date + keep HH:MM:SS
+    """
+    meta_path = (
+        WORKING_DIR
+        / "Simulacra"
+        / "environment"
+        / "frontend_server"
+        / "storage"
+        / origin_sim_code
+        / "reverie"
+        / "meta.json"
+    )
+    if not meta_path.exists():
+        logger.warning("Origin meta.json not found at %s", meta_path)
+        return
+
+    try:
+        data = json.loads(meta_path.read_text(encoding="utf-8"))
+        today_str = _today_date_str()
+
+        if isinstance(data.get("start_date"), str):
+            data["start_date"] = today_str
+
+        curr_time = data.get("curr_time")
+        if isinstance(curr_time, str):
+            # Expected: "Month D, YYYY, HH:MM:SS"
+            try:
+                _, time_part = curr_time.rsplit(", ", 1)
+                data["curr_time"] = f"{today_str}, {time_part}"
+            except ValueError:
+                # If unexpected format, still set to midnight.
+                data["curr_time"] = f"{today_str}, 00:00:00"
+        else:
+            data["curr_time"] = f"{today_str}, 00:00:00"
+
+        meta_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        logger.info("Patched origin meta date to today: %s", meta_path)
+    except Exception as e:
+        logger.warning("Failed patching origin meta.json date (%s): %s", meta_path, e)
+
 def run_backend_server(target: str, stop_event: threading.Event):
     """Run the backend server for a specific target scenario."""
     try:
+        # Patch origin meta.json so new scenarios show today's date in UI.
+        _patch_origin_meta_date("test-simulation")
+
         # Backend configuration
         backend_script_file = "reverie.py"
         url = "http://127.0.0.1:8000/simulator_home"
