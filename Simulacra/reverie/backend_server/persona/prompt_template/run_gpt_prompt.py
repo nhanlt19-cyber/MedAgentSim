@@ -783,14 +783,9 @@ def run_gpt_prompt_action_arena(action_description,
   prompt_input = create_prompt_input(action_description, persona, maze, act_world, act_sector)
   prompt = generate_prompt(prompt_input, prompt_template)
 
-  fail_safe = get_fail_safe()
-  output = safe_generate_response(prompt, gpt_param, 5, fail_safe,
-                                   __func_validate, __func_clean_up)
-
-  y = f"{act_world}:{act_sector}"
-  x = [i.strip() for i in persona.s_mem.get_str_accessible_sector_arenas(y).split(",")]
-  if output not in x and len(x) > 0:
-    output = random.choice(x)
+  # Hard-code lại như bản demo gốc: luôn chọn Dentistry Consultation Room
+  # để đảm bảo cả doctor và patient gặp nhau tại phòng này (cho mục đích demo).
+  output = "Dentistry Consultation Room"
 
   if debug or verbose: 
     print_run_prompts(prompt_template, persona, gpt_param, 
