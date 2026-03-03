@@ -487,6 +487,30 @@ def run_gpt_prompt_task_decomp(persona,
   output = safe_generate_response(prompt, gpt_param, 5, get_fail_safe(),
                                    __func_validate, __func_clean_up)
 
+  # Đảm bảo output luôn là list các [task, duration] an toàn.
+  cleaned = []
+  if isinstance(output, list):
+    for item in output:
+      # Trường hợp lý tưởng: [subtask, duration]
+      if isinstance(item, (list, tuple)) and len(item) >= 2:
+        sub_task = str(item[0])
+        sub_dur = item[1]
+      else:
+        # Nếu LLM trả về chuỗi hoặc định dạng lạ, dùng toàn bộ làm mô tả,
+        # và gán duration mặc định = duration gốc.
+        sub_task = str(item)
+        sub_dur = duration
+      try:
+        sub_dur = float(sub_dur)
+      except Exception:
+        sub_dur = float(duration)
+      cleaned.append([sub_task, sub_dur])
+  else:
+    # Nếu output không phải list (ví dụ một string), fallback 1 bước duy nhất.
+    cleaned.append([str(output), float(duration)])
+
+  output = cleaned
+
   # TODO THERE WAS A BUG HERE... 
   # This is for preventing overflows...
   """
