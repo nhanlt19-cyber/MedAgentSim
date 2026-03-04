@@ -38,8 +38,8 @@ class BAgent:
         model_name="meta-llama/Llama-3.2-3B-Instruct",  # ít được dùng nếu Ollama đã bật
         server_url="http://localhost:8012/v1/chat/completions",
         ollama_url="http://localhost:11434",
-        # tên model phải trùng với `ollama list`, ví dụ: llama3.2:3b
-        ollama_model="llama3.2:3b",
+        # tên model phải trùng với `ollama list`, ví dụ: llama3.1:8b
+        ollama_model="llama3.1:8b",
     ):
         """
         Initializes the BAgent:
@@ -54,9 +54,20 @@ class BAgent:
             ollama_model: Ollama model name (default: llama3.1)
         """
         self.server_url = server_url
-        self.model_name = model_name
         self.ollama_url = ollama_url
         self.ollama_model = ollama_model
+        # backend cho vLLM / local HF (không liên quan Ollama)
+        self.model_name = model_name
+
+        # Nếu người dùng truyền alias dạng "ollama:xxx" hoặc "ollama",
+        # thì tự map sang tên model Ollama tương ứng.
+        if isinstance(model_name, str):
+            if model_name.startswith("ollama:"):
+                # Ví dụ: "ollama:llama3.1:8b" → "llama3.1:8b"
+                self.ollama_model = model_name.split(":", 1)[1]
+            elif model_name.strip().lower() == "ollama":
+                # Alias "ollama" mặc định dùng llama3.1:8b
+                self.ollama_model = "llama3.1:8b"
 
         # Check available backends in order of preference
         self.use_server = self._check_vllm_server()
