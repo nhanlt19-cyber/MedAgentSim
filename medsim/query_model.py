@@ -63,6 +63,8 @@ class BAgent:
             "SERVER_URL", "http://localhost:8012/v1/chat/completions"
         )
         self.server_token = server_token or os.environ.get("SERVER_TOKEN")
+        # if the user explicitly provided a URL (or via env) treat it as "force remote"
+        self.force_server = server_url is not None or bool(os.environ.get("SERVER_URL"))
         self.ollama_url = ollama_url or os.environ.get("OLLAMA_HOST", "http://localhost:11434")
         self.ollama_model = ollama_model
         # backend cho vLLM / local HF (không liên quan Ollama)
@@ -88,6 +90,12 @@ class BAgent:
                 f"Using vLLM server at {self.server_url}, skipping local model loading."
             )
         else:
+            if self.force_server:
+                # user asked for remote but health check failed
+                raise RuntimeError(
+                    f"Requested remote server {self.server_url} is unreachable or returned error; "
+                    "not falling back to local model because server URL was explicitly set."
+                )
             self.use_ollama = self._check_ollama_server()
             if self.use_ollama:
                 print(

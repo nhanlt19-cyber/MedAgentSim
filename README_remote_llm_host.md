@@ -93,6 +93,31 @@ Using vLLM server: https://llmapi.iec-uit.com/v1/chat/completions
 
 Và mọi agent (doctor/patient/etc) sẽ gọi endpoint này qua HTTP.
 
+### 🔧 Gặp lỗi "No server available, loading model locally..."
+
+Nếu bạn thêm `SERVER_URL` và `SERVER_TOKEN` nhưng vẫn thấy thông báo trên và sau đó một traceback kiểu `Unauthorized for url https://huggingface.co/...` thì nghĩa là
+- kiểm tra sức khoẻ `GET <server_url>/health` trả về **không phải 200** (404/401/timeout) 
+- vì `force_server` được bật (URL được cung cấp), `BAgent.__init__` sẽ ném `RuntimeError` thay vì dùng mô hình HF cục bộ.
+
+Nguyên nhân phổ biến:
+* dịch vụ remote không triển khai `/health` endpoint (nhiều API thương mại không có).
+* token chưa được gửi (chưa đặt đúng `SERVER_TOKEN` hoặc sai header).
+* máy chủ không thể truy cập từ host hiện tại (firewall/NAT). 
+
+**Cách khắc phục:**
+1. Đảm bảo địa chỉ và cổng chính xác. Thử `curl` trực tiếp:
+   ```bash
+   curl -H "Authorization: Bearer $SERVER_TOKEN" \
+        -X POST $SERVER_URL \
+        -d '{"model":"foo","messages":[{"role":"user","content":"hi"}]}'
+   ```
+   nếu bạn nhận được phản hồi hợp lệ thì server hoạt động.
+2. Nếu server không hỗ trợ `/health`, bạn có thể tạm thời vô hiệu hoá kiểm tra bằng cách xóa biến `SERVER_URL` hoặc thay đổi mã theo hướng dẫn ở phần "mở rộng" phía dưới.
+3. Kiểm tra token — nếu server trả 401 thì thêm token (hoặc dùng `--server-token`/env).
+4. Nếu bạn muốn bỏ qua hoàn toàn kiểm tra sức khoẻ và chấp nhận lỗi lúc gọi, đặt `force_server=False` khi khởi tạo `BAgent` (ví dụ trong code experiment riêng).
+
+
+
 ---
 ## 6. Điều khuyên
 
