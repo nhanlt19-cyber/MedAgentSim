@@ -96,8 +96,8 @@ Và mọi agent (doctor/patient/etc) sẽ gọi endpoint này qua HTTP.
 ### 🔧 Gặp lỗi "No server available, loading model locally..."
 
 Nếu bạn thêm `SERVER_URL` và `SERVER_TOKEN` nhưng vẫn thấy thông báo trên và sau đó một traceback kiểu `Unauthorized for url https://huggingface.co/...` thì nghĩa là
-- kiểm tra sức khoẻ `GET <server_url>/health` trả về **không phải 200** (404/401/timeout) 
-- vì `force_server` được bật (URL được cung cấp), `BAgent.__init__` sẽ ném `RuntimeError` thay vì dùng mô hình HF cục bộ.
+- kiểm tra sức khoẻ ban đầu không thành công: `GET <server_url>/health` trả về không phải 200 (404/401/timeout) **và** thử POST nhẹ vào endpoint cũng gặp lỗi.
+- trước đây, `BAgent.__init__` sẽ ném `RuntimeError` vì `force_server` được bật (URL được cung cấp); trong phiên bản hiện tại nó sẽ chỉ in cảnh báo và thử gọi thực tế.
 
 Nguyên nhân phổ biến:
 * dịch vụ remote không triển khai `/health` endpoint (nhiều API thương mại không có).
@@ -112,7 +112,11 @@ Nguyên nhân phổ biến:
         -d '{"model":"foo","messages":[{"role":"user","content":"hi"}]}'
    ```
    nếu bạn nhận được phản hồi hợp lệ thì server hoạt động.
-2. Nếu server không hỗ trợ `/health`, bạn có thể tạm thời vô hiệu hoá kiểm tra bằng cách xóa biến `SERVER_URL` hoặc thay đổi mã theo hướng dẫn ở phần "mở rộng" phía dưới.
+2. Nếu server không hỗ trợ `/health`, bạn có thể tạm thời vô hiệu hoá kiểm tra bằng cách xóa biến `SERVER_URL` hoặc thay đổi mã theo hướng dẫn ở phần "mở rộng" phía dưới.  Với phiên bản mã mới, BAgent sẽ hiển thị thông báo như sau và tiếp tục thử:
+
+    ```
+    WARNING: Remote server https://... did not pass health check, but SERVER_URL was set; attempting queries anyway. (errors will occur if the host truly is unreachable.)
+    ```
 3. Kiểm tra token — nếu server trả 401 thì thêm token (hoặc dùng `--server-token`/env).
 4. Nếu bạn muốn bỏ qua hoàn toàn kiểm tra sức khoẻ và chấp nhận lỗi lúc gọi, đặt `force_server=False` khi khởi tạo `BAgent` (ví dụ trong code experiment riêng).
 

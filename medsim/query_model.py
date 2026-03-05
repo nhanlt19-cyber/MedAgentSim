@@ -91,37 +91,75 @@ class BAgent:
             )
         else:
             if self.force_server:
-                # user asked for remote but health check failed
-                raise RuntimeError(
-                    f"Requested remote server {self.server_url} is unreachable or returned error; "
-                    "not falling back to local model because server URL was explicitly set."
+                # health check failed but user explicitly provided a URL; we will still
+                # set `use_server` to True so that actual queries try the remote host and
+                # any error is raised there.  This avoids crashing at import time when
+                # /health is missing.
+                logger.warning(
+                    "Remote server %s did not pass health check, but SERVER_URL was set; "
+                    "attempting queries anyway. "
+                    "(errors will occur if the host truly is unreachable.)",
+                    self.server_url,
                 )
-            self.use_ollama = self._check_ollama_server()
-            if self.use_ollama:
-                print(
-                    f"Using Ollama server: {self.ollama_url} with model {self.ollama_model}"
-                )
-                logger.info(
-                    f"Using Ollama at {self.ollama_url} with model {self.ollama_model}"
-                )
+                self.use_server = True
             else:
-                print("No server available, loading model locally...")
-                self._load_model()
+                # proceed to Ollama / local fallback if not forcing remote
+                self.use_ollama = self._check_ollama_server()
+                if self.use_ollama:
+                    print(
+                        f"Using Ollama server: {self.ollama_url} with model {self.ollama_model}"
+                    )
+                    logger.info(
+                        f"Using Ollama at {self.ollama_url} with model {self.ollama_model}"
+                    )
+                else:
+                    print("No server available, loading model locally...")
+                    self._load_model()
 
     def _check_vllm_server(self):
-        """Checks if the vLLM/chat-completions server is running."""
+        """Performs a lightweight reachability check on the vLLM/chat-completions endpoint.
+
+        The remote service is considered available if either:
+        * a GET to `/health` returns 200, or
+        * a minimal POST to the chat endpoint succeeds (status code 200) or returns an
+          authentication error (401/403) – the latter means the host is alive but our
+          token may be wrong.
+
+        This makes the check tolerant of servers that don’t expose a `/health` path or
+        that gate access.
+        """
+        headers = {"Content-Type": "application/json"}
+        if self.server_token:
+            headers["Authorization"] = f"Bearer {self.server_token}"
+
+        # first, try the health endpoint if it exists
         try:
-            headers = {}
-            if self.server_token:
-                headers["Authorization"] = f"Bearer {self.server_token}"
-            response = requests.get(
+            r = requests.get(
                 self.server_url.replace("/v1/chat/completions", "/health"),
                 timeout=2,
                 headers=headers,
             )
-            return response.status_code == 200
+            if r.status_code == 200:
+                return True
+            # if we get 401/403/404, fall through to the POST probe
         except requests.RequestException:
-            return False
+            pass
+
+        # attempt a lightweight POST to the actual chat endpoint
+        try:
+            payload = {
+                "model": self.model_name,
+                "messages": [{"role": "user", "content": "ping"}],
+                "max_tokens": 1,
+            }
+            r = requests.post(self.server_url, headers=headers, json=payload, timeout=2)
+            # status 200 means the endpoint works; 401/403 means it's reachable but auth failed
+            if r.status_code in (200, 401, 403):
+                return True
+        except requests.RequestException:
+            pass
+
+        return False
 
     def _check_ollama_server(self):
         """Checks if the Ollama server is running."""
@@ -546,7 +584,11 @@ class BAgent:
         return max(response_counts, key=response_counts.get)
 
 
-fallback_agent = BAgent()
+try:
+    fallback_agent = BAgent()
+except Exception as e:
+    logger.warning(f"Unable to create default BAgent during import: {e}")
+    fallback_agent = None
 
 
 def query_model(
@@ -762,7 +804,10 @@ def query_model(
 
             else:
                 # Fallback to the baseline agent if none of the above match.
-                answer = fallback_agent.query_model(prompt, system_prompt)
+                if fallback_agent is not None:
+                    answer = fallback_agent.query_model(prompt, system_prompt)
+                else:
+                    raise RuntimeError("No fallback agent available to handle query")
 
             return answer
 
