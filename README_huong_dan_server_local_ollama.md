@@ -45,6 +45,12 @@ Mấu chốt: **chỉ cần không chạy vLLM và có Ollama ở `localhost:114
 
 ## 3. Cài đặt Ollama trên Ubuntu 24.04.3 LTS
 
+> **Lưu ý:** nếu bạn muốn sử dụng một máy chủ LLM từ xa thay vì Ollama cục bộ,
+> xem thêm hướng dẫn mới trong `README_remote_llm_host.md` (nằm cùng cấp).  File đó
+> mô tả cách cấu hình `SERVER_URL`/`SERVER_TOKEN` và thay đổi mã nguồn để trỏ
+> tới endpoint từ xa.
+
+
 Giả sử server là Ubuntu 24.04.3 LTS 64‑bit. Nếu là OS khác, tham khảo tài liệu chính thức của Ollama.
 
 ### 3.1. Cài Ollama

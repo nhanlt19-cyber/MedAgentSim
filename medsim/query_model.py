@@ -35,26 +35,35 @@ logger.setLevel(logging.INFO)
 class BAgent:
     def __init__(
         self,
-        model_name="meta-llama/Llama-3.2-3B-Instruct",  # ít được dùng nếu Ollama đã bật
-        server_url="http://localhost:8012/v1/chat/completions",
-        ollama_url="http://localhost:11434",
+        model_name="meta-llama/Llama-3.2-3B-Instruct",  # rarely used when Ollama/remote is enabled
+        server_url: str | None = None,
+        server_token: str | None = None,
+        ollama_url: str | None = None,
         # tên model phải trùng với `ollama list`, ví dụ: llama3.1:8b
         ollama_model="llama3.1:8b",
     ):
         """
         Initializes the BAgent:
-        - Uses vLLM server if available.
-        - Otherwise, uses Ollama if available.
-        - Otherwise, loads the model locally.
+        - Optionally uses a remote vLLM/chat-completions server.
+        - Otherwise prefers Ollama if available (local or remote).
+        - Falls back to loading a Hugging Face model locally.
 
         Args:
-            model_name: Model name for vLLM/transformers
-            server_url: vLLM server URL
-            ollama_url: Ollama server URL (default: http://localhost:11434)
+            model_name: Model name for vLLM/transformers (ignored if an LLM server is used)
+            server_url: vLLM/chat-completions endpoint. If not set, will read
+                from $SERVER_URL or default to http://localhost:8012/v1/chat/completions.
+            server_token: Bearer token to add to the remote server requests. Also
+                read from $SERVER_TOKEN if not passed explicitly.
+            ollama_url: Ollama server URL (default: $OLLAMA_HOST or http://localhost:11434)
             ollama_model: Ollama model name (default: llama3.1)
         """
-        self.server_url = server_url
-        self.ollama_url = ollama_url
+        # allow overrides via environment variables so users don't have to touch every
+        # call site in the codebase
+        self.server_url = server_url or os.environ.get(
+            "SERVER_URL", "http://localhost:8012/v1/chat/completions"
+        )
+        self.server_token = server_token or os.environ.get("SERVER_TOKEN")
+        self.ollama_url = ollama_url or os.environ.get("OLLAMA_HOST", "http://localhost:11434")
         self.ollama_model = ollama_model
         # backend cho vLLM / local HF (không liên quan Ollama)
         self.model_name = model_name
@@ -92,10 +101,15 @@ class BAgent:
                 self._load_model()
 
     def _check_vllm_server(self):
-        """Checks if the vLLM server is running."""
+        """Checks if the vLLM/chat-completions server is running."""
         try:
+            headers = {}
+            if self.server_token:
+                headers["Authorization"] = f"Bearer {self.server_token}"
             response = requests.get(
-                self.server_url.replace("/v1/chat/completions", "/health"), timeout=2
+                self.server_url.replace("/v1/chat/completions", "/health"),
+                timeout=2,
+                headers=headers,
             )
             return response.status_code == 200
         except requests.RequestException:
@@ -324,6 +338,8 @@ class BAgent:
         }
 
         headers = {"Content-Type": "application/json"}
+        if self.server_token:
+            headers["Authorization"] = f"Bearer {self.server_token}"
 
         for attempt in range(tries):
             try:

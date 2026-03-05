@@ -344,6 +344,14 @@ def main():
         logger.info(f"Loading configuration from {CONFIG_PATH}")
         config = load_config(CONFIG_PATH)
         
+        # If config specifies a remote LLM server, export it so BAgent picks it up
+        if config.get("remote_llm"):
+            rl = config["remote_llm"]
+            if "url" in rl:
+                os.environ.setdefault("SERVER_URL", rl["url"])
+            if "token" in rl:
+                os.environ.setdefault("SERVER_TOKEN", rl["token"])
+
         # Initialize scenario loader
         dataset = config["scenario"]["dataset"]
         logger.info(f"Using dataset: {dataset}")
