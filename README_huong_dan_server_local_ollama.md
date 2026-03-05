@@ -206,7 +206,7 @@ Giải thích nhanh:
   - Không thấy vLLM server,
   - Phát hiện Ollama ở `http://localhost:11434`,
   - Dùng đúng **model `llama3.2`** mà bạn đã cấu hình trong `ollama_model`.
-- **`--num_scenarios 1`**: chỉ chạy 1 scenario (ID = 0) để pipeline luôn lặp lại ca cố định.
+- **`--num_scenarios 1`**: chỉ chạy 1 scenario (ID = 0) để pipeline luôn lặp lại ca cố định.  Nếu bạn muốn chạy **2 scenario cố định** mỗi lần, đặt `--num_scenarios 2` hoặc dùng cờ `-n 2` khi khởi chạy.
 - **`--total_inferences 10`**: tối đa 10 lượt hỏi đáp trước khi bước sang thảo luận nội bộ 5 bác sĩ.
 
 ### 5.3. Kết quả & log

@@ -6,6 +6,7 @@ import time
 import logging
 import json
 import yaml
+import argparse
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Type
@@ -337,9 +338,23 @@ def run_scenarios(num_scenarios: int, delay: int = 5):
         logger.error(f"Error running scenarios: {e}")
         print_summary()
 
+def parse_args():
+    p = argparse.ArgumentParser(description="Run MedAgentSim clinical scenarios")
+    p.add_argument(
+        "-n",
+        "--num-scenarios",
+        type=int,
+        help="Number of scenarios to run (overrides config file)",
+    )
+    return p.parse_args()
+
+
 def main():
     """Main function to run the simulation."""
     try:
+        # parse CLI arguments
+        args = parse_args()
+
         # Load configuration
         logger.info(f"Loading configuration from {CONFIG_PATH}")
         config = load_config(CONFIG_PATH)
@@ -358,14 +373,17 @@ def main():
         scenario_loader = load_scenario_loader(dataset)
         
         # Determine number of scenarios
-        configured_num = config["scenario"]["num_scenarios"]
         total_available = scenario_loader.num_scenarios
-        num_scenarios = configured_num or total_available
+        if args.num_scenarios is not None:
+            num_scenarios = args.num_scenarios
+        else:
+            configured_num = config["scenario"]["num_scenarios"]
+            num_scenarios = configured_num or total_available
         
         logger.info(f"Running {num_scenarios} scenarios (out of {total_available} available)")
         
         # Run the simulation
-        # Sử dụng đúng số scenario từ config (không hard-code)
+        # Sử dụng đúng số scenario từ config hoặc CLI
         run_scenarios(num_scenarios)
         
     except Exception as e:
