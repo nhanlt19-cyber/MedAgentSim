@@ -56,6 +56,35 @@ def load_config(config_path: str) -> dict:
         raise
 
 
+def find_next_available_scenario_id(output_dir: str) -> int:
+    """
+    Finds the next available scenario ID by checking existing scenario folders.
+    
+    Args:
+        output_dir (str): Path to the output directory.
+    
+    Returns:
+        int: Next available scenario ID (0 if no scenarios exist).
+    """
+    if not os.path.exists(output_dir):
+        return 0
+    
+    max_id = -1
+    try:
+        for item in os.listdir(output_dir):
+            if item.startswith("scenario_") and os.path.isdir(os.path.join(output_dir, item)):
+                try:
+                    scenario_id = int(item.replace("scenario_", ""))
+                    max_id = max(max_id, scenario_id)
+                except ValueError:
+                    # Skip if folder name doesn't follow pattern
+                    continue
+    except Exception as e:
+        logger.warning(f"Error while finding next scenario ID: {e}")
+    
+    return max_id + 1
+
+
 def main(config: dict) -> None:
     """
     Main function to run the medical diagnosis simulation.
@@ -329,10 +358,17 @@ def run_simulation(
     actual_num_scenarios = num_scenarios or scenario_loader.num_scenarios
     logger.info(f"Starting simulation for {actual_num_scenarios} scenarios.")
 
+    # Find the next available scenario ID for output
+    start_output_scenario_id = find_next_available_scenario_id(output_dir)
+    logger.info(f"Starting output scenario ID: {start_output_scenario_id}")
+
     for scenario_id in range(min(actual_num_scenarios, scenario_loader.num_scenarios)):
         total_scenarios += 1
         dialogue_history = []
         logger.debug(f"Starting scenario {scenario_id}.")
+
+        # Calculate the output scenario ID (auto-incremented)
+        output_scenario_id = start_output_scenario_id + scenario_id
 
         # Initialize scenario and agents
         scenario = scenario_loader.get_scenario(id=scenario_id)
@@ -361,6 +397,7 @@ def run_simulation(
             scenario_id=scenario_id,
             total_correct=total_correct,
             total_scenarios=total_scenarios,
+            output_scenario_id=output_scenario_id,
         )
         if is_correct:
             total_correct += 1
@@ -391,7 +428,10 @@ def run_simulation_idx(
     scenario_id: int,
 ) -> Tuple[int, int]:
     """
-    Runs the medical diagnosis simulation.
+    Runs the medical diagnosis simulation for a single scenario.
+    
+    Args:
+        total_scenarios (int): Current scenario number (1-indexed, used to calculate output ID).
 
     Returns:
         Tuple[int, int]: Total correct diagnoses and total scenarios presented.
@@ -411,16 +451,10 @@ def run_simulation_idx(
     dialogue_history = []
     logger.debug(f"Starting scenario {scenario_id}.")
 
-    # Initialize scenario and agents
-    # scenario = scenario_loader.get_scenario(id=scenario_id)
-    # meas_agent.update_scenario(scenario=scenario)
-    # patient_agent.update_scenario(scenario=scenario, bias_present=patient_bias)
-    # doctor_agent.update_scenario(
-    #     scenario=scenario,
-    #     bias_present=doctor_bias,
-    #     max_infs=total_inferences,
-    #     img_request=img_request,
-    # )
+    # Find the next available scenario ID for output based on current run number
+    start_output_scenario_id = find_next_available_scenario_id(output_dir)
+    output_scenario_id = start_output_scenario_id + (total_scenarios - 1)
+    logger.info(f"Output scenario ID: {output_scenario_id}")
 
     # Run interaction loop
     is_correct = run_interaction_loop(
@@ -438,6 +472,7 @@ def run_simulation_idx(
         scenario_id=scenario_id,
         total_correct=total_correct,
         total_scenarios=total_scenarios,
+        output_scenario_id=output_scenario_id,
     )
     
     logger.debug(
@@ -464,9 +499,15 @@ def run_interaction_loop(
     scenario_id: int,
     total_correct: int,
     total_scenarios: int,
+    output_scenario_id: Optional[int] = None,
 ) -> bool:
     """
     Runs the interaction loop for a single scenario.
+
+    Args:
+        scenario_id (int): The scenario ID from the dataset.
+        output_scenario_id (int): The scenario ID for saving output (auto-incremented). 
+                                  If None, uses scenario_id.
 
     Returns:
         bool: True if the diagnosis was correct, False otherwise.
@@ -561,18 +602,21 @@ def run_interaction_loop(
         # Prevent API timeouts
         time.sleep(1.0)
 
+    # Use output_scenario_id if provided, otherwise use scenario_id
+    save_scenario_id = output_scenario_id if output_scenario_id is not None else scenario_id
+    
     # Save the dialogue history to a JSON file at the end of each scenario
     try:
-        scenario_output_dir = os.path.join(output_dir, f"scenario_{scenario_id}")
+        scenario_output_dir = os.path.join(output_dir, f"scenario_{save_scenario_id}")
         os.makedirs(scenario_output_dir, exist_ok=True)
         dialogue_file = os.path.join(scenario_output_dir, "dialogue_history.json")
         with open(dialogue_file, "w") as f:
             json.dump(dialogue_history, f, indent=2)
         logger.info(
-            f"Dialogue history saved for scenario {scenario_id} at {dialogue_file}."
+            f"Dialogue history saved for scenario {save_scenario_id} at {dialogue_file}."
         )
     except Exception as e:
-        logger.exception(f"Failed to save dialogue history for scenario {scenario_id}.")
+        logger.exception(f"Failed to save dialogue history for scenario {save_scenario_id}.")
 
     return is_correct
 
