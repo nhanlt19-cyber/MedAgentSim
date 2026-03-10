@@ -1,10 +1,10 @@
 ########## Answer ##########
-None (GPT answer: C)
+None (GPT answer: A)
 ########## Answer ##########
-None (GPT answer: C)
+None (GPT answer: A)
 ########## Answer ##########
-None (GPT answer: C)
+None (GPT answer: A)
 ########## Answer ##########
-None (GPT answer: D)
+None (GPT answer: A)
 ########## Answer ##########
-None (GPT answer: C)
+None (GPT answer: A)
