@@ -329,8 +329,15 @@ def run_scenarios(num_scenarios: int, delay: int = 5):
             # Calculate the output scenario ID (auto-incremented)
             output_scenario_id = next_available_id + i
             
-            # Update scenario index and reset diagnosis flag so Reverie can set it when DIAGNOSIS READY
-            update_json_file(SIMULATION_CONTROLLER_PATH, {"simulation_index": i, "diagnosis_ready": False})
+            # IMPORTANT:
+            # - `simulation_index` is used by Reverie -> MedAgentSim bridge (`converse.agent_chat_v3`)
+            #   to decide which `output/scenario_<id>/dialogue_history.json` to write/read.
+            # - If we keep `simulation_index=i` (often 0 when -n 1), outputs are overwritten.
+            # Therefore we set `simulation_index` to the auto-incremented output_scenario_id.
+            update_json_file(
+                SIMULATION_CONTROLLER_PATH,
+                {"simulation_index": output_scenario_id, "diagnosis_ready": False},
+            )
             
             # Setup for this scenario - use auto-incremented ID
             target = f"scenario-{output_scenario_id}"

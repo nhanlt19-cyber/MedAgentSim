@@ -72,13 +72,23 @@ def find_next_available_scenario_id(output_dir: str) -> int:
     max_id = -1
     try:
         for item in os.listdir(output_dir):
-            if item.startswith("scenario_") and os.path.isdir(os.path.join(output_dir, item)):
-                try:
-                    scenario_id = int(item.replace("scenario_", ""))
-                    max_id = max(max_id, scenario_id)
-                except ValueError:
-                    # Skip if folder name doesn't follow pattern
-                    continue
+            # Support both naming styles:
+            # - scenario_<id>  (underscore) used by MedAgentSim outputs
+            # - scenario-<id>  (dash) sometimes used by other parts / user conventions
+            if not os.path.isdir(os.path.join(output_dir, item)):
+                continue
+            if item.startswith("scenario_"):
+                suffix = item.replace("scenario_", "", 1)
+            elif item.startswith("scenario-"):
+                suffix = item.replace("scenario-", "", 1)
+            else:
+                continue
+            try:
+                scenario_id = int(suffix)
+                max_id = max(max_id, scenario_id)
+            except ValueError:
+                # Skip if folder name doesn't follow pattern
+                continue
     except Exception as e:
         logger.warning(f"Error while finding next scenario ID: {e}")
     
