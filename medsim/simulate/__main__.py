@@ -28,6 +28,7 @@ BACKEND_DIR = WORKING_DIR / "Simulacra" / "reverie" / "backend_server"
 SIMULATION_CONTROLLER_PATH = BACKEND_DIR / "simulation_controller.json"
 CONFIG_PATH = WORKING_DIR / "medsim" / "configs" / "config_sim.yaml"
 LOGS_PATH = WORKING_DIR / "logs"
+OUTPUT_DIR = WORKING_DIR / "output"
 
 # Create logs directory
 LOGS_PATH.mkdir(exist_ok=True)
@@ -41,6 +42,29 @@ from medsim.core.scenario import (
     ScenarioLoaderMIMICIV,
     resolve_model_name,
 )
+
+# Import auto-increment function from medsim.run
+try:
+    from medsim.run import find_next_available_scenario_id
+except ImportError:
+    logger.warning("Could not import find_next_available_scenario_id from medsim.run")
+    def find_next_available_scenario_id(output_dir):
+        """Fallback implementation if medsim.run is not available."""
+        output_dir_path = Path(output_dir)
+        if not output_dir_path.exists():
+            return 0
+        max_id = -1
+        try:
+            for item in output_dir_path.iterdir():
+                if item.is_dir() and item.name.startswith("scenario_"):
+                    try:
+                        scenario_id = int(item.name.replace("scenario_", ""))
+                        max_id = max(max_id, scenario_id)
+                    except ValueError:
+                        continue
+        except Exception as e:
+            logger.warning(f"Error finding next scenario ID: {e}")
+        return max_id + 1
 
 # Mapping of dataset names to their loader classes
 SCENARIO_LOADERS = {
@@ -284,6 +308,10 @@ def run_scenarios(num_scenarios: int, delay: int = 5):
         total_scenarios = 0
         total_correct = 0
         
+        # Find the next available scenario ID for auto-increment
+        next_available_id = find_next_available_scenario_id(str(OUTPUT_DIR))
+        logger.info(f"Next available scenario ID: {next_available_id}")
+        
         # Reset simulation state
         update_json_file(
             SIMULATION_CONTROLLER_PATH, 
@@ -298,13 +326,18 @@ def run_scenarios(num_scenarios: int, delay: int = 5):
         for i in range(num_scenarios):
             logger.info(f"\n=== Starting Scenario {i+1}/{num_scenarios} ===")
             
+            # Calculate the output scenario ID (auto-incremented)
+            output_scenario_id = next_available_id + i
+            
             # Update scenario index and reset diagnosis flag so Reverie can set it when DIAGNOSIS READY
             update_json_file(SIMULATION_CONTROLLER_PATH, {"simulation_index": i, "diagnosis_ready": False})
             
-            # Setup for this scenario
-            target = f"scenario-{i}"
+            # Setup for this scenario - use auto-incremented ID
+            target = f"scenario-{output_scenario_id}"
             url = "http://127.0.0.1:8000/simulator_home"
             stop_event = threading.Event()
+            
+            logger.info(f"Using output scenario ID: {output_scenario_id}")
             
             # Create and start threads
             backend_thread = threading.Thread(
