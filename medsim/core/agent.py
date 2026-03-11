@@ -11,6 +11,7 @@ from collections import Counter
 from importlib import import_module
 
 import time
+import os
 import torch
 import transformers
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, pipeline
@@ -518,7 +519,10 @@ class DoctorAgent:
 
     def inference_doctor(self, question, image_requested=False, thread_id = 1) -> str:
         answer = str()
-        if self.infs >= self.MAX_INFS-1:
+        # Optional kill-switch for internal discussion (useful for prompt-injection experiments)
+        # Export DISABLE_INTERNAL_DISCUSSION=1 to force direct doctor responses only.
+        disable_internal = os.environ.get("DISABLE_INTERNAL_DISCUSSION", "").strip() in ("1", "true", "TRUE", "yes", "YES")
+        if (not disable_internal) and self.infs >= self.MAX_INFS - 1:
             return self.internal_discussion(question)
         answer = self.pipe.query_model("\nHere is a history of your dialogue: " + self.agent_hist + "\n Here was the patient response: " + question + "Now please continue your dialogue\nDoctor: ", self.system_prompt(), image_requested=image_requested, scene=self.scenario, thread_id = thread_id)
         self.agent_hist += question + "\n\n" + answer + "\n\nq[[[]"
