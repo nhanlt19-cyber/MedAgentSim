@@ -3,6 +3,7 @@ import os
 import json
 import time
 import logging
+import sys
 from typing import Tuple, Optional
 
 import openai
@@ -32,6 +33,31 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+
+def _read_human_input(prompt: str) -> str:
+    """
+    See medsim/main.py for rationale.
+    Enable robust multi-line paste with:
+      export MULTILINE_HUMAN_INPUT=1
+    End pasted block with:
+      <<<END>>>
+    """
+    if os.environ.get("MULTILINE_HUMAN_INPUT", "").strip() not in ("1", "true", "TRUE", "yes", "YES"):
+        return input(prompt)
+
+    print(prompt, end="", flush=True)
+    print("(multiline enabled: end with a line '<<<END>>>' )", flush=True)
+    lines: list[str] = []
+    while True:
+        line = sys.stdin.readline()
+        if line == "":
+            break
+        line = line.rstrip("\n")
+        if line.strip() == "<<<END>>>":
+            break
+        lines.append(line)
+    return "\n".join(lines).strip()
 
 def load_config(config_path: str) -> dict:
     """
@@ -542,7 +568,7 @@ def run_interaction_loop(
 
         # Obtain doctor's dialogue
         if inf_type == "human_doctor":
-            doctor_dialogue = input("\nQuestion for patient: ")
+            doctor_dialogue = _read_human_input("\nQuestion for patient: ")
         else:
             doctor_dialogue = doctor_agent.inference_doctor(
                 pi_dialogue, image_requested=imgs_requested, scenario_id=scenario_id#, thread_id=inf_id
@@ -628,7 +654,7 @@ def run_interaction_loop(
         else:
             # Obtain patient's response
             if inf_type == "human_patient":
-                pi_dialogue = input("\nResponse to doctor: ")
+                pi_dialogue = _read_human_input("\nResponse to doctor: ")
             else:
                 pi_dialogue = patient_agent.inference_patient(doctor_dialogue)
             patient_text = (

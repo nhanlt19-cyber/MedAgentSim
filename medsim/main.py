@@ -2,10 +2,41 @@ import argparse
 import os
 import json
 import time
+import sys
 import openai
 from medsim.core.agent import MeasurementAgent, PatientAgent, DoctorAgent, compare_results
 from medsim.core.scenario import *
 from medsim.query_model import *
+
+
+def _read_human_input(prompt: str) -> str:
+    """
+    Reads input for human_doctor / human_patient.
+
+    By default uses Python input() (single-line). Multi-line paste (EscapeChar/Combine attacks)
+    does NOT work reliably with input(): only the first line is consumed, the remaining lines
+    spill into the next prompt.
+
+    To enable robust multi-line input, set:
+      export MULTILINE_HUMAN_INPUT=1
+    Then terminate your pasted block with a line containing exactly:
+      <<<END>>>
+    """
+    if os.environ.get("MULTILINE_HUMAN_INPUT", "").strip() not in ("1", "true", "TRUE", "yes", "YES"):
+        return input(prompt)
+
+    print(prompt, end="", flush=True)
+    print("(multiline enabled: end with a line '<<<END>>>' )", flush=True)
+    lines: list[str] = []
+    while True:
+        line = sys.stdin.readline()
+        if line == "":
+            break  # EOF
+        line = line.rstrip("\n")
+        if line.strip() == "<<<END>>>":
+            break
+        lines.append(line)
+    return "\n".join(lines).strip()
 def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor_llm, patient_llm,
          measurement_llm, moderator_llm, num_scenarios, dataset, img_request, total_inferences,
          anthropic_api_key=None, output_dir=None):
@@ -82,7 +113,7 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
 
             # Obtain doctor's dialogue
             if inf_type == "human_doctor":
-                doctor_dialogue = input("\nQuestion for patient: ")
+                doctor_dialogue = _read_human_input("\nQuestion for patient: ")
             else:
                 doctor_dialogue = doctor_agent.inference_doctor(pi_dialogue, image_requested=imgs)
 
@@ -151,7 +182,7 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
             else:
                 # Obtain patient's response
                 if inf_type == "human_patient":
-                    pi_dialogue = input("\nResponse to doctor: ")
+                    pi_dialogue = _read_human_input("\nResponse to doctor: ")
                 else:
                     pi_dialogue = patient_agent.inference_patient(doctor_dialogue)
                 patient_text = f"Patient [{int(((_inf_id+1)/total_inferences)*100)}%]: {pi_dialogue}"
