@@ -633,6 +633,7 @@ def query_model(
     # Initialize Groq client
     # client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
+    last_error: Exception | None = None
     for _ in tqdm(range(tries), desc="Querying model"):
         # Optionally clip prompt length
         if clip_prompt:
@@ -836,8 +837,13 @@ def query_model(
             return answer
 
         except Exception as e:
+            last_error = e
             time.sleep(timeout)
             continue
+
+    # Never return None (downstream code expects a string).
+    logger.error("query_model failed after retries. Last error: %s", last_error)
+    return "[]"
 
 
 def import_generate():
@@ -911,6 +917,9 @@ def get_diagnosis(backend, scenario_id):
 
 
 def extract_bracket_content(s: str):
+    # Be defensive: upstream LLM calls can fail and return None.
+    if s is None:
+        return "[]"
     if "[" in s or "]" in s:
         return "[" + s.split("[", 1)[-1].split("]")[0] + "]"
     return s  # Return original string if brackets are not found
