@@ -556,8 +556,26 @@ def run_interaction_loop(
         print(dialogue_text)
         dialogue_history.append({"speaker": "Doctor", "text": doctor_dialogue})
 
-        # Check for diagnosis
-        if "DIAGNOSIS READY" in doctor_dialogue.upper() or inf_id == total_inferences - 1:
+        # Check for diagnosis. Do not end just because we reached last turn.
+        # If last turn and still no DIAGNOSIS READY, force one more call requiring the format.
+        if "DIAGNOSIS READY" not in doctor_dialogue.upper() and inf_id == total_inferences - 1:
+            forced_prompt = (
+                "FINAL INSTRUCTION:\n"
+                "You must provide your final answer NOW and you must use exactly this format:\n"
+                "DIAGNOSIS READY: <final diagnosis>\n"
+                "Do not ask any more questions.\n"
+            )
+            doctor_dialogue = doctor_agent.inference_doctor(
+                pi_dialogue + "\n" + forced_prompt,
+                image_requested=imgs_requested,
+                scenario_id=scenario_id,
+            )
+            dialogue_text = f"Doctor [forced-final]: {doctor_dialogue}"
+            logger.info(dialogue_text)
+            print(dialogue_text)
+            dialogue_history.append({"speaker": "Doctor", "text": doctor_dialogue})
+
+        if "DIAGNOSIS READY" in doctor_dialogue.upper():
             # Compare results
             result = compare_results(
                 doctor_dialogue,

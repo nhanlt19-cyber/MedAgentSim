@@ -92,10 +92,24 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
 
             dialogue_history.append({"speaker": "Doctor", "text": doctor_dialogue})
 
-            # Check for diagnosis
-            # Lưu ý: vòng lặp chạy từ 0 → total_inferences-1
-            # nên điều kiện kết thúc theo số lượt phải là (_inf_id == total_inferences - 1)
-            if "DIAGNOSIS READY" in doctor_dialogue or _inf_id == total_inferences - 1:
+            # Check for diagnosis.
+            # Do NOT end just because we reached the last turn. If the model fails to emit
+            # "DIAGNOSIS READY", force one more final call that requires the format.
+            if "DIAGNOSIS READY" not in doctor_dialogue and _inf_id == total_inferences - 1:
+                forced_prompt = (
+                    "FINAL INSTRUCTION:\n"
+                    "You must provide your final answer NOW and you must use exactly this format:\n"
+                    "DIAGNOSIS READY: <final diagnosis>\n"
+                    "Do not ask any more questions.\n"
+                )
+                doctor_dialogue = doctor_agent.inference_doctor(
+                    pi_dialogue + "\n" + forced_prompt, image_requested=imgs
+                )
+                dialogue_text = f"Doctor [forced-final]: {doctor_dialogue}"
+                print(dialogue_text)
+                dialogue_history.append({"speaker": "Doctor", "text": doctor_dialogue})
+
+            if "DIAGNOSIS READY" in doctor_dialogue:
                 correctness = compare_results(doctor_dialogue, scenario.diagnosis_information(), mpipe)
                 if correctness:
                     total_correct += 1
