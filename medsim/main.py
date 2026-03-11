@@ -93,21 +93,32 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
             dialogue_history.append({"speaker": "Doctor", "text": doctor_dialogue})
 
             # Check for diagnosis.
-            # Do NOT end just because we reached the last turn. If the model fails to emit
-            # "DIAGNOSIS READY", force one more final call that requires the format.
-            if "DIAGNOSIS READY" not in doctor_dialogue and _inf_id == total_inferences - 1:
+            # On the last turn, if the model fails to emit "DIAGNOSIS READY", force one more
+            # final call that requires the format, and if it still doesn't comply, wrap it.
+            if _inf_id == total_inferences - 1 and "DIAGNOSIS READY" not in doctor_dialogue:
                 forced_prompt = (
                     "FINAL INSTRUCTION:\n"
                     "You must provide your final answer NOW and you must use exactly this format:\n"
                     "DIAGNOSIS READY: <final diagnosis>\n"
-                    "Do not ask any more questions.\n"
+                    "Output ONLY that single line. Do not ask any more questions.\n"
                 )
-                doctor_dialogue = doctor_agent.inference_doctor(
+                forced_reply = doctor_agent.inference_doctor(
                     pi_dialogue + "\n" + forced_prompt, image_requested=imgs
                 )
-                dialogue_text = f"Doctor [forced-final]: {doctor_dialogue}"
+                dialogue_text = f"Doctor [forced-final]: {forced_reply}"
                 print(dialogue_text)
-                dialogue_history.append({"speaker": "Doctor", "text": doctor_dialogue})
+                dialogue_history.append({"speaker": "Doctor", "text": forced_reply})
+                doctor_dialogue = forced_reply
+
+                # If the model still didn't comply, wrap the reply so downstream scoring works.
+                if "DIAGNOSIS READY" not in doctor_dialogue:
+                    wrapped = doctor_dialogue.strip()
+                    if not wrapped:
+                        wrapped = "Unknown"
+                    doctor_dialogue = f"DIAGNOSIS READY: {wrapped}"
+                    dialogue_text = f"Doctor [wrapped-final]: {doctor_dialogue}"
+                    print(dialogue_text)
+                    dialogue_history.append({"speaker": "Doctor", "text": doctor_dialogue})
 
             if "DIAGNOSIS READY" in doctor_dialogue:
                 correctness = compare_results(doctor_dialogue, scenario.diagnosis_information(), mpipe)

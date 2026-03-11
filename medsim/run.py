@@ -563,17 +563,29 @@ def run_interaction_loop(
                 "FINAL INSTRUCTION:\n"
                 "You must provide your final answer NOW and you must use exactly this format:\n"
                 "DIAGNOSIS READY: <final diagnosis>\n"
-                "Do not ask any more questions.\n"
+                "Output ONLY that single line. Do not ask any more questions.\n"
             )
-            doctor_dialogue = doctor_agent.inference_doctor(
+            forced_reply = doctor_agent.inference_doctor(
                 pi_dialogue + "\n" + forced_prompt,
                 image_requested=imgs_requested,
                 scenario_id=scenario_id,
             )
-            dialogue_text = f"Doctor [forced-final]: {doctor_dialogue}"
+            dialogue_text = f"Doctor [forced-final]: {forced_reply}"
             logger.info(dialogue_text)
             print(dialogue_text)
-            dialogue_history.append({"speaker": "Doctor", "text": doctor_dialogue})
+            dialogue_history.append({"speaker": "Doctor", "text": forced_reply})
+            doctor_dialogue = forced_reply
+
+            # If still no DIAGNOSIS READY, wrap so scoring and logging can proceed.
+            if "DIAGNOSIS READY" not in doctor_dialogue.upper():
+                wrapped = doctor_dialogue.strip()
+                if not wrapped:
+                    wrapped = "Unknown"
+                doctor_dialogue = f"DIAGNOSIS READY: {wrapped}"
+                dialogue_text = f"Doctor [wrapped-final]: {doctor_dialogue}"
+                logger.info(dialogue_text)
+                print(dialogue_text)
+                dialogue_history.append({"speaker": "Doctor", "text": doctor_dialogue})
 
         if "DIAGNOSIS READY" in doctor_dialogue.upper():
             # Compare results
