@@ -113,6 +113,21 @@ class BAgent:
                         f"Using Ollama at {self.ollama_url} with model {self.ollama_model}"
                     )
                 else:
+                    # User asked for Ollama but server not available: do not pass "ollama:..." to HF
+                    _wants_ollama = (
+                        isinstance(self.model_name, str)
+                        and (
+                            self.model_name.strip().lower().startswith("ollama:")
+                            or self.model_name.strip().lower() == "ollama"
+                        )
+                    )
+                    if _wants_ollama:
+                        raise RuntimeError(
+                            "Ollama backend requested (model=%r) but Ollama server is not reachable. "
+                            "Start Ollama on this machine (e.g. 'ollama serve') and ensure the model is pulled (e.g. 'ollama pull llama3.1:8b'). "
+                            "If Ollama runs elsewhere, set OLLAMA_HOST (e.g. export OLLAMA_HOST=http://host:11434)."
+                            % self.model_name
+                        )
                     print("No server available, loading model locally...")
                     self._load_model()
 
@@ -162,12 +177,20 @@ class BAgent:
         return False
 
     def _check_ollama_server(self):
-        """Checks if the Ollama server is running."""
-        try:
-            response = requests.get(f"{self.ollama_url}/api/tags", timeout=2)
-            return response.status_code == 200
-        except requests.RequestException:
-            return False
+        """Checks if the Ollama server is running. Tries primary URL then 127.0.0.1 if localhost."""
+        timeout = 5
+        urls_to_try = [self.ollama_url]
+        if "localhost" in self.ollama_url.lower():
+            urls_to_try.append(self.ollama_url.replace("localhost", "127.0.0.1"))
+        for url in urls_to_try:
+            try:
+                response = requests.get(f"{url}/api/tags", timeout=timeout)
+                if response.status_code == 200:
+                    self.ollama_url = url
+                    return True
+            except requests.RequestException:
+                continue
+        return False
 
     def _load_model(self):
         """Loads the model locally if no vLLM server is found."""
@@ -585,7 +608,8 @@ class BAgent:
 
 
 try:
-    fallback_agent = BAgent()
+    # Prefer Ollama for default so we don't touch gated HF models when Ollama is available
+    fallback_agent = BAgent(model_name="ollama:llama3.1:8b")
 except Exception as e:
     logger.warning(f"Unable to create default BAgent during import: {e}")
     fallback_agent = None

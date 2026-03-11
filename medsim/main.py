@@ -8,7 +8,7 @@ from medsim.core.scenario import *
 from medsim.query_model import *
 def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor_llm, patient_llm,
          measurement_llm, moderator_llm, num_scenarios, dataset, img_request, total_inferences,
-         anthropic_api_key=None):
+         anthropic_api_key=None, output_dir=None):
     openai.api_key = api_key
     anthropic_llms = ["claude3.5sonnet"]
     replicate_llms = ["llama-3-70b-instruct", "llama-2-70b-chat", "mixtral-8x7b"]
@@ -16,7 +16,8 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
         os.environ["REPLICATE_API_TOKEN"] = replicate_api_key
     if doctor_llm in anthropic_llms:
         os.environ["ANTHROPIC_API_KEY"] = anthropic_api_key
-    output_dir = "/media/mbzuaiser/SSD1/Komal/Documents/multiagent/MedAgentSim/output"
+    # Default to a local ./output folder for portability (Windows/Linux/macOS).
+    output_dir = output_dir or os.path.join(os.getcwd(), "output")
     os.makedirs(output_dir, exist_ok=True)
     # Load the appropriate scenario loader
     if dataset == "MedQA":
@@ -160,6 +161,7 @@ if __name__ == "__main__":
     parser.add_argument('--start_scenario', type=int, default=0, required=False, help='Index of first scenario to simulate (0-based)')
     parser.add_argument('--total_inferences', type=int, default=20, required=False, help='Number of inferences between patient and doctor')
     parser.add_argument('--anthropic_api_key', type=str, default=None, required=False, help='Anthropic API key for Claude 3.5 Sonnet')
+    parser.add_argument('--output_dir', type=str, default=None, required=False, help='Where to save scenario outputs (default: ./output)')
     
     args = parser.parse_args()
 
@@ -181,6 +183,7 @@ if __name__ == "__main__":
         args.doctor_image_request,
         args.total_inferences,
         args.anthropic_api_key,
+        args.output_dir,
     )
 
 
