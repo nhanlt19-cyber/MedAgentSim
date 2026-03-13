@@ -8,6 +8,35 @@ from medsim.core.agent import MeasurementAgent, PatientAgent, DoctorAgent, compa
 from medsim.core.scenario import *
 from medsim.query_model import *
 
+try:
+    # Prefer the shared implementation used by medsim.run / medsim.simulate
+    from medsim.run import find_next_available_scenario_id
+except Exception:
+    def find_next_available_scenario_id(output_dir: str) -> int:
+        """
+        Fallback: find next available output/scenario_<id> folder index.
+        Returns 0 if no scenario folders exist.
+        """
+        if not os.path.exists(output_dir):
+            return 0
+        max_id = -1
+        for item in os.listdir(output_dir):
+            full = os.path.join(output_dir, item)
+            if not os.path.isdir(full):
+                continue
+            suffix = None
+            if item.startswith("scenario_"):
+                suffix = item.replace("scenario_", "", 1)
+            elif item.startswith("scenario-"):
+                suffix = item.replace("scenario-", "", 1)
+            if suffix is None:
+                continue
+            try:
+                max_id = max(max_id, int(suffix))
+            except ValueError:
+                continue
+        return max_id + 1
+
 
 def _read_human_input(prompt: str) -> str:
     """
@@ -39,7 +68,7 @@ def _read_human_input(prompt: str) -> str:
     return "\n".join(lines).strip()
 def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor_llm, patient_llm,
          measurement_llm, moderator_llm, num_scenarios, dataset, img_request, total_inferences,
-         anthropic_api_key=None, output_dir=None):
+         anthropic_api_key=None, output_dir=None, server_url: str | None = None, server_token: str | None = None):
     openai.api_key = api_key
     anthropic_llms = ["claude3.5sonnet"]
     replicate_llms = ["llama-3-70b-instruct", "llama-2-70b-chat", "mixtral-8x7b"]
@@ -47,6 +76,14 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
         os.environ["REPLICATE_API_TOKEN"] = replicate_api_key
     if doctor_llm in anthropic_llms:
         os.environ["ANTHROPIC_API_KEY"] = anthropic_api_key
+
+    # Remote OpenAI-compatible chat endpoint (vLLM, etc).
+    # BAgent/query_model reads these env vars.
+    if server_url:
+        os.environ["SERVER_URL"] = server_url
+    if server_token:
+        os.environ["SERVER_TOKEN"] = server_token
+
     # Default to a local ./output folder for portability (Windows/Linux/macOS).
     output_dir = output_dir or os.path.join(os.getcwd(), "output")
     os.makedirs(output_dir, exist_ok=True)
@@ -81,7 +118,12 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
     # Cho phép bắt đầu từ một scenario tùy ý (để dễ test từng ca riêng lẻ)
     start_id = globals().get("START_SCENARIO_ID", 0)
 
-    for _scenario_id in range(start_id, min(start_id + num_scenarios, scenario_loader.num_scenarios)):
+    # Auto-increment output scenario id to avoid overwriting output/scenario_0
+    start_output_scenario_id = find_next_available_scenario_id(output_dir)
+
+    for loop_idx, _scenario_id in enumerate(
+        range(start_id, min(start_id + num_scenarios, scenario_loader.num_scenarios))
+    ):
         total_presents += 1
         pi_dialogue = ""
         dialogue_history = []
@@ -193,7 +235,8 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
             time.sleep(1.0)
         
         # Save the dialogue history to a JSON file at the end of each scenario
-        scenario_output_dir = os.path.join(output_dir, f"scenario_{_scenario_id}")
+        output_scenario_id = start_output_scenario_id + loop_idx
+        scenario_output_dir = os.path.join(output_dir, f"scenario_{output_scenario_id}")
         os.makedirs(scenario_output_dir, exist_ok=True)
         dialogue_file = os.path.join(scenario_output_dir, "dialogue_history.json")
         with open(dialogue_file, "w") as f:
@@ -218,6 +261,20 @@ if __name__ == "__main__":
     parser.add_argument('--total_inferences', type=int, default=20, required=False, help='Number of inferences between patient and doctor')
     parser.add_argument('--anthropic_api_key', type=str, default=None, required=False, help='Anthropic API key for Claude 3.5 Sonnet')
     parser.add_argument('--output_dir', type=str, default=None, required=False, help='Where to save scenario outputs (default: ./output)')
+    parser.add_argument(
+        '--server_url',
+        type=str,
+        default=os.environ.get("SERVER_URL"),
+        required=False,
+        help='Remote OpenAI-compatible chat-completions endpoint (e.g. https://.../v1/chat/completions). Also reads from $SERVER_URL.',
+    )
+    parser.add_argument(
+        '--server_token',
+        type=str,
+        default=os.environ.get("SERVER_TOKEN"),
+        required=False,
+        help='Bearer token for remote endpoint (optional). Also reads from $SERVER_TOKEN.',
+    )
     
     args = parser.parse_args()
 
@@ -240,6 +297,8 @@ if __name__ == "__main__":
         args.total_inferences,
         args.anthropic_api_key,
         args.output_dir,
+        args.server_url,
+        args.server_token,
     )
 
 
