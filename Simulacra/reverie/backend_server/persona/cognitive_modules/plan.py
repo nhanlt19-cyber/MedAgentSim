@@ -351,7 +351,11 @@ def generate_convo(maze, init_persona, target_persona):
 
 
 def generate_convo_summary(persona, convo): 
-  convo_summary = run_gpt_prompt_summarize_conversation(persona, convo)[0]
+  result = run_gpt_prompt_summarize_conversation(persona, convo)
+  if result is None:
+    print("WARNING: run_gpt_prompt_summarize_conversation returned None, using default summary")
+    return "conversing with a housemate about morning greetings"
+  convo_summary = result[0]
   return convo_summary
 
 

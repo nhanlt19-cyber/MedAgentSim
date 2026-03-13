@@ -1776,6 +1776,9 @@ def run_gpt_prompt_summarize_conversation(persona, conversation, test_input=None
     return output, [output, prompt, gpt_param, prompt_input, fail_safe]
   # ChatGPT Plugin ===========================================================
 
+  # Fallback: return fail_safe when ChatGPT_safe_generate_response returns False
+  print("WARNING: ChatGPT_safe_generate_response returned False, using fail_safe for summarize_conversation")
+  return fail_safe, [fail_safe, prompt, gpt_param, prompt_input, fail_safe]
 
   # gpt_param = {"engine": "gpt-3.5-turbo-0125", "max_tokens": 50, 
   #              "temperature": 0, "top_p": 1, "stream": False,

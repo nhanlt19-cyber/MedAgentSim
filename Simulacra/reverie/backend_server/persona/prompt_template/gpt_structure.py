@@ -131,7 +131,11 @@ def ChatGPT_request(prompt):
     # messages=[{"role": "user", "content": prompt}]
     # )
     # return completion.choices[0].message.content
-    return backend.query_model(prompt)
+    result = backend.query_model(prompt)
+    if result is None:
+      print("WARNING: backend.query_model returned None")
+      return "ChatGPT ERROR"
+    return result
   
   except Exception as e: 
     print(f"Error: {e}")
