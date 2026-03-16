@@ -485,7 +485,16 @@
           } else if (curr_persona_name === "Klaus Mueller") {
             bubbleLabel = "PAT";
           }
-	        pronunciatios[curr_persona_name].setText(bubbleLabel + ": " + pronunciatio_content);
+          // Nếu pronunciatio chỉ là một số (ví dụ "1") thì bỏ đi để avoid "DOC: 1"
+          let pronText = pronunciatio_content;
+          if (/^\s*\d+\s*$/.test(pronText)) {
+            pronText = "";
+          }
+          let bubbleText = bubbleLabel;
+          if (pronText) {
+            bubbleText += ": " + pronText;
+          }
+	        pronunciatios[curr_persona_name].setText(bubbleText);
 	      }
 
 	      console.log(curr_persona_name);
@@ -574,7 +583,11 @@
 		        let chat_content = "";
 		        for (let j=0; j<chat_list.length; j++) {
 		          let speaker = chat_list[j][0];
-		          let text = chat_list[j][1];
+		          let text = chat_list[j][1] || "";
+		          // Nhiều dòng hội thoại trong JSON đã có sẵn tiền tố "Doctor:" / "Patient:"
+		          // Trong UI ta đã gán nhãn bong bóng (Doctor/Patient) nên bỏ tiền tố này để tránh
+		          // các chuỗi kiểu "Doctor: Patient: ...".
+		          text = text.replace(/^(Doctor|Patient):\s*/i, "");
 		          // Bong bóng trái (doctor) = persona đầu tiên, bong bóng phải (patient) = persona thứ hai
 		          let isFirstPersona = (speaker === persona_key_list[0]);
 		          let bubbleClass = isFirstPersona ? "chat-bubble chat-bubble-left" : "chat-bubble chat-bubble-right";
@@ -588,8 +601,17 @@
 	        let actionEl = document.getElementById("current_action__"+curr_persona_name_os);
 	        let locEl = document.getElementById("target_address__"+curr_persona_name_os);
 	        if (actionEl && locEl) {
-	          actionEl.innerHTML = description_content.split("@")[0];
-	          locEl.innerHTML = description_content.split("@")[1];
+            let rawAction = (description_content.split("@")[0] || "").trim();
+            // Một số action từ planner có dạng
+            // "waiting for patients (1) Maria is reviewing the patient schedule for the day"
+            // → chỉ hiển thị phần sau dấu ") " để người dùng thấy hành động cụ thể.
+            let simplifiedAction = rawAction;
+            let closingParenIdx = rawAction.indexOf(") ");
+            if (closingParenIdx !== -1 && rawAction.toLowerCase().startsWith("waiting for patients")) {
+              simplifiedAction = rawAction.slice(closingParenIdx + 2).trim();
+            }
+	          actionEl.innerHTML = simplifiedAction || rawAction;
+	          locEl.innerHTML = (description_content.split("@")[1] || "").trim();
 	        }
 	      }
 

@@ -949,15 +949,28 @@ def _chat_react(maze, persona, focused_event, reaction_mode, personas):
   # Khởi động hội thoại nhiều lượt; mỗi bước simulate sẽ hiện thêm 1 câu
   init_persona.scratch.start_chat(convo)
   target_persona.scratch.start_chat(convo)
+
   # Nếu hội thoại đã có chẩn đoán (DIAGNOSIS READY), đánh dấu để Reverie dừng sau khi stream hết chat
-  if convo and any(
-    (isinstance(utt, (list, tuple)) and len(utt) >= 2 and "DIAGNOSIS READY" in str(utt[1]))
-    or (isinstance(utt, str) and "DIAGNOSIS READY" in utt)
-    for utt in convo
-  ):
+  diagnosis_in_convo = bool(
+    convo
+    and any(
+      (isinstance(utt, (list, tuple)) and len(utt) >= 2 and "DIAGNOSIS READY" in str(utt[1]))
+      or (isinstance(utt, str) and "DIAGNOSIS READY" in utt)
+      for utt in convo
+    )
+  )
+  if diagnosis_in_convo:
     set_diagnosis_ready()
-  convo_summary = generate_convo_summary(init_persona, convo)
-  inserted_act = convo_summary
+
+  # Mô tả hành động tiếp theo sau khi chat:
+  # - Nếu đã có chẩn đoán, dùng câu cố định "kết thúc buổi khám" để tránh cảm giác
+  #   quay lại bước "đi tìm bác sĩ / bàn về triệu chứng" lần nữa.
+  # - Nếu chưa có chẩn đoán, dùng summary chi tiết từ LLM như trước.
+  if diagnosis_in_convo:
+    inserted_act = f"{init_persona.name} has finished the consultation and is wrapping up the visit"
+  else:
+    convo_summary = generate_convo_summary(init_persona, convo)
+    inserted_act = convo_summary
   inserted_act_dur = duration_min
 
   act_start_time = target_persona.scratch.act_start_time
