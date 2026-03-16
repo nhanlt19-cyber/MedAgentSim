@@ -6,6 +6,7 @@ Description: This defines the "Act" module for generative agents.
 """
 import sys
 import random
+import os
 sys.path.append('../../')
 
 from global_methods import *
@@ -32,6 +33,61 @@ def execute(persona, maze, personas, plan):
   OUTPUT: 
     execution
   """
+  def _is_truthy_env(key: str) -> bool:
+    return os.environ.get(key, "").strip().lower() in ("1", "true", "yes", "on")
+
+  # Fast mode (teleport) for UI demos:
+  # - Still moves agents to the correct room (jump to a target tile)
+  # - Avoids expensive path_finder() calls and multi-step walking
+  #
+  # Enable with: FAST_CHAT_TELEPORT=1
+  # If you want the old behavior "freeze in place", use FAST_CHAT_DEMO=1
+  if _is_truthy_env("FAST_CHAT_DEMO"):
+    persona.scratch.planned_path = []
+    persona.scratch.act_path_set = True
+    ret = persona.scratch.curr_tile
+    description = f"{persona.scratch.act_description}"
+    description += f" @ {persona.scratch.act_address}"
+    return ret, persona.scratch.act_pronunciatio, description
+
+  if _is_truthy_env("FAST_CHAT_TELEPORT"):
+    # Resolve a target tile without pathfinding.
+    target_tile = None
+
+    try:
+      if "<persona>" in plan:
+        # Jump next to the other persona (same tile is OK for demo)
+        other_name = plan.split("<persona>")[-1].strip()
+        if other_name in personas and getattr(personas[other_name].scratch, "curr_tile", None) is not None:
+          target_tile = personas[other_name].scratch.curr_tile
+      elif "<waiting>" in plan:
+        parts = plan.split()
+        if len(parts) >= 3:
+          target_tile = [int(parts[1]), int(parts[2])]
+      elif "<random>" in plan:
+        base_plan = ":".join(plan.split(":")[:-1])
+        if base_plan in getattr(maze, "address_tiles", {}):
+          target_tile = random.sample(list(maze.address_tiles[base_plan]), 1)[0]
+      else:
+        # Normal address jump: {world}:{sector}:{arena}:{game_objects}
+        if plan in getattr(maze, "address_tiles", {}):
+          target_tile = random.sample(list(maze.address_tiles[plan]), 1)[0]
+        else:
+          # Sometimes plan can include a game object that isn't indexed; try stripping it.
+          base_plan = ":".join(plan.split(":")[:-1])
+          if base_plan in getattr(maze, "address_tiles", {}):
+            target_tile = random.sample(list(maze.address_tiles[base_plan]), 1)[0]
+    except Exception:
+      target_tile = None
+
+    if target_tile is not None:
+      persona.scratch.planned_path = []
+      persona.scratch.act_path_set = True
+      persona.scratch.curr_tile = target_tile
+      description = f"{persona.scratch.act_description}"
+      description += f" @ {persona.scratch.act_address}"
+      return target_tile, persona.scratch.act_pronunciatio, description
+
   if "<random>" in plan and persona.scratch.planned_path == []: 
     persona.scratch.act_path_set = False
 

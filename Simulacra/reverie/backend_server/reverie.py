@@ -564,7 +564,18 @@ class ReverieServer:
           # để "phát" dần hội thoại Doctor–Patient ra frontend.
           # Dùng 300 bước như một mức trung gian: nhanh hơn 5000 bước gốc,
           # nhưng dài hơn 100 bước để streaming chat kịp hiển thị nhiều câu.
-          self.start_server(300)
+          # Cho phép override khi demo (giảm thời gian chờ) qua biến môi trường:
+          # - REVERIE_TOQ_STEPS: số bước chạy (mặc định 300)
+          # - REVERIE_SERVER_SLEEP: sleep mỗi step (mặc định 0.1)
+          try:
+            self.server_sleep = float(os.environ.get("REVERIE_SERVER_SLEEP", self.server_sleep))
+          except Exception:
+            pass
+          try:
+            steps = int(os.environ.get("REVERIE_TOQ_STEPS", "300"))
+          except Exception:
+            steps = 300
+          self.start_server(steps)
           self.save()
           break
         elif sim_command.lower() in ["f", "fin", "finish", "save and finish"]: 
