@@ -263,6 +263,45 @@ class Scratch:
     if self.chat_step_idx < len(self.chat_full):
       self.chat_step_idx += 1
       self.chat = self.chat_full[:self.chat_step_idx]
+      # Cập nhật "pronunciatio" (cảm xúc/biểu cảm) theo nội dung hội thoại để UI demo trực quan hơn.
+      # Đây là heuristic nhẹ, không gọi LLM để tránh làm chậm.
+      try:
+        last = self.chat[-1] if self.chat else None
+        last_text = ""
+        last_speaker = ""
+        if isinstance(last, (list, tuple)) and len(last) >= 2:
+          last_speaker = str(last[0])
+          last_text = str(last[1] or "")
+        t = last_text.lower()
+
+        # role hint: project demo currently maps Maria=Doctor, Klaus=Patient
+        is_doctor = self.name.strip() == "Maria Lopez"
+        is_patient = self.name.strip() == "Klaus Mueller"
+        spoke_now = (last_speaker.strip() == self.name.strip())
+
+        emoji = "💬"
+        if "thank" in t or "appreciate" in t:
+          emoji = "🙏"
+        elif any(k in t for k in ["worried", "anxious", "scared", "hard", "trouble", "pain", "falls", "fall"]):
+          emoji = "😟"
+        elif "?" in last_text:
+          emoji = "🩺" if is_doctor else "🤔"
+        else:
+          emoji = "💬"
+
+        # If listening (not speaking), soften expression a bit
+        if not spoke_now and emoji in ("🩺",):
+          emoji = "💬"
+
+        # Keep deterministic role icon when in chat
+        if is_doctor and emoji == "💬":
+          emoji = "🩺"
+        elif is_patient and emoji == "💬":
+          emoji = "🙂"
+
+        self.act_pronunciatio = emoji
+      except Exception:
+        pass
 
 
   def save(self, out_json):

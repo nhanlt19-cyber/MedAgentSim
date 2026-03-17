@@ -310,22 +310,12 @@ def extract_speaker_text(json_path, doc_name, pat_name):
         if not conversations:
             return []
 
-        # Xử lý phần "DIAGNOSIS READY" trong lượt cuối (nếu có)
-        had_diagnosis = False
-        last_speaker, last_text = conversations[-1]
-        diagnosis_pattern = re.search(r"DIAGNOSIS READY:.*?$", last_text, re.DOTALL | re.MULTILINE)
-        if diagnosis_pattern:
-            last_text = last_text.replace(diagnosis_pattern.group(), "").strip()
-            conversations[-1] = [last_speaker, last_text]
-            had_diagnosis = True
-
-        # Nếu có chẩn đoán, thêm câu cảm ơn tự nhiên từ bệnh nhân để kết thúc
-        if had_diagnosis and conversations:
-            thanks_text = (
-                f"Thank you, {doc_name}. I appreciate you explaining everything and helping me "
-                f"understand my condition. I'll follow your recommendations and head back home now."
-            )
-            conversations.append([pat_name, thanks_text])
+        # Bỏ các dòng chẩn đoán kỹ thuật để UI hiển thị hội thoại "thuần" (không tạo dòng rỗng).
+        conversations = [
+            [spk, txt]
+            for spk, txt in conversations
+            if txt and "DIAGNOSIS READY" not in txt.upper()
+        ]
 
         return conversations
 
