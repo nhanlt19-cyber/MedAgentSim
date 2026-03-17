@@ -13,6 +13,23 @@ from global_methods import *
 from path_finder import *
 from utils import *
 
+# Cache path_finder results to avoid recomputing shortest paths repeatedly.
+# This preserves slow "walk tile-by-tile" behavior but makes backend faster.
+_PATH_CACHE: dict[tuple[tuple[int, int], tuple[int, int]], list] = {}
+_PATH_CACHE_MAX = 5000
+
+def _cached_path_finder(collision_maze, start_tile, end_tile, block_id):
+  key = (tuple(start_tile), tuple(end_tile))
+  cached = _PATH_CACHE.get(key)
+  if cached is not None:
+    return cached
+  path = path_finder(collision_maze, start_tile, end_tile, block_id)
+  if len(_PATH_CACHE) >= _PATH_CACHE_MAX:
+    # crude eviction: clear all (fast and safe for demo)
+    _PATH_CACHE.clear()
+  _PATH_CACHE[key] = path
+  return path
+
 def execute(persona, maze, personas, plan): 
   """
   Given a plan (action's string address), we execute the plan (actually 
@@ -104,18 +121,18 @@ def execute(persona, maze, personas, plan):
       # Executing persona-persona interaction.
       target_p_tile = (personas[plan.split("<persona>")[-1].strip()]
                        .scratch.curr_tile)
-      potential_path = path_finder(maze.collision_maze, 
+      potential_path = _cached_path_finder(maze.collision_maze, 
                                    persona.scratch.curr_tile, 
                                    target_p_tile, 
                                    collision_block_id)
       if len(potential_path) <= 2: 
         target_tiles = [potential_path[0]]
       else: 
-        potential_1 = path_finder(maze.collision_maze, 
+        potential_1 = _cached_path_finder(maze.collision_maze, 
                                 persona.scratch.curr_tile, 
                                 potential_path[int(len(potential_path)/2)], 
                                 collision_block_id)
-        potential_2 = path_finder(maze.collision_maze, 
+        potential_2 = _cached_path_finder(maze.collision_maze, 
                                 persona.scratch.curr_tile, 
                                 potential_path[int(len(potential_path)/2)+1], 
                                 collision_block_id)
@@ -189,7 +206,7 @@ def execute(persona, maze, personas, plan):
       # an input, and returns a list of coordinate tuples that becomes the
       # path. 
       # e.g., [(0, 1), (1, 1), (1, 2), (1, 3), (1, 4)...]
-      curr_path = path_finder(maze.collision_maze, 
+      curr_path = _cached_path_finder(maze.collision_maze, 
                               curr_tile, 
                               i, 
                               collision_block_id)

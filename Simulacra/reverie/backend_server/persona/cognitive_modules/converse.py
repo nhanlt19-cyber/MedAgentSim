@@ -276,16 +276,65 @@ def agent_chat_v3(doctor_name, patient_name):
 def extract_speaker_text(json_path, doc_name, pat_name):
     """
     Đọc dialogue_history.json và trả về danh sách [speaker_name, text] theo đúng thứ tự.
-    Logic đơn giản hoá để UI khớp 1-1 với log:
-      - Mỗi entry Doctor/Patient trong JSON tương ứng 1 lượt nói.
-      - Bỏ 'REQUEST TEST:' và tiền tố 'Doctor:' / 'Patient:' ở đầu câu nếu có.
-      - Không cố split / gộp lại nhiều lượt từ 1 entry (tránh lẫn speaker).
+    Lưu ý: nhiều entry (đặc biệt "Doctor") có thể chứa nhiều đoạn hội thoại con
+    có marker "Doctor:" / "Patient:" trong cùng 1 chuỗi text. Hàm này sẽ tách
+    các marker đó thành nhiều lượt để UI hiển thị đúng vai.
     """
     try:
         with open(json_path, 'r', encoding='utf-8') as file:
             data = json.load(file)
 
-        conversations = []
+        def _role_to_name(role: str) -> str:
+            return doc_name if role == "Doctor" else pat_name
+
+        # Match "Doctor:", "Patient:", also "Doctor 1:"/"Doctor 2:" (ensembling)
+        marker_re = re.compile(r"(?:^|\n)\s*(Doctor(?:\s*\d+)?|Patient)\s*:\s*", re.IGNORECASE)
+
+        def _split_by_markers(text: str, default_role: str) -> list[list[str]]:
+            """
+            Split a raw text into [[speaker_name, utterance], ...] by detecting
+            embedded markers. Content before the first marker is attributed to default_role.
+            """
+            if not text:
+                return []
+
+            # Remove technical prefix but keep test name/result
+            cleaned = re.sub(r"\bREQUEST TEST:\s*", "", text)
+            cleaned = cleaned.replace("\r\n", "\n")
+
+            parts: list[list[str]] = []
+            matches = list(marker_re.finditer(cleaned))
+
+            if not matches:
+                utt = cleaned.strip()
+                if utt:
+                    # If string starts with a redundant "Doctor:"/"Patient:" on same line, strip once
+                    utt = re.sub(r"^(Doctor(?:\s*\d+)?|Patient)\s*:\s*", "", utt, flags=re.IGNORECASE).strip()
+                    if utt:
+                        parts.append([_role_to_name(default_role), utt])
+                return parts
+
+            # Prefix before first marker
+            prefix = cleaned[:matches[0].start()].strip()
+            if prefix:
+                parts.append([_role_to_name(default_role), prefix])
+
+            for i, m in enumerate(matches):
+                role_raw = (m.group(1) or "").strip().lower()
+                role = "Doctor" if role_raw.startswith("doctor") else "Patient"
+                start = m.end()
+                end = matches[i + 1].start() if i + 1 < len(matches) else len(cleaned)
+                utt = cleaned[start:end].strip()
+                if not utt:
+                    continue
+                # Some models echo "Patient:"/"Doctor:" again at start of the segment
+                utt = re.sub(r"^(Doctor(?:\s*\d+)?|Patient)\s*:\s*", "", utt, flags=re.IGNORECASE).strip()
+                if utt:
+                    parts.append([_role_to_name(role), utt])
+
+            return parts
+
+        conversations: list[list[str]] = []
 
         for entry in data:
             if "speaker" not in entry or "text" not in entry:
@@ -295,29 +344,26 @@ def extract_speaker_text(json_path, doc_name, pat_name):
             if speaker == "Measurement":
                 continue
 
-            if speaker == "Doctor":
-                speaker = doc_name
-            elif speaker == "Patient":
-                speaker = pat_name
+            default_role = "Doctor" if speaker == "Doctor" else "Patient"
 
             text = entry["text"] or ""
-            # Bỏ các thẻ kỹ thuật / tiền tố không cần thiết
-            text = re.sub(r"\bREQUEST TEST:\s*", "", text)
-            text = re.sub(r"^(Doctor|Patient):\s*", "", text.strip(), flags=re.IGNORECASE)
-
-            conversations.append([speaker, text])
+            conversations.extend(_split_by_markers(text, default_role))
 
         if not conversations:
             return []
 
-        # Bỏ các dòng chẩn đoán kỹ thuật để UI hiển thị hội thoại "thuần" (không tạo dòng rỗng).
-        conversations = [
-            [spk, txt]
-            for spk, txt in conversations
-            if txt and "DIAGNOSIS READY" not in txt.upper()
-        ]
+        # Bỏ các dòng chẩn đoán kỹ thuật để UI hiển thị hội thoại "thuần".
+        conversations = [[spk, txt] for spk, txt in conversations if txt and "DIAGNOSIS READY" not in txt.upper()]
 
-        return conversations
+        # Merge consecutive turns by same speaker (optional, keeps UI compact)
+        merged: list[list[str]] = []
+        for spk, txt in conversations:
+            if not merged or merged[-1][0] != spk:
+                merged.append([spk, txt])
+            else:
+                merged[-1][1] = (merged[-1][1].rstrip() + "\n\n" + txt.lstrip()).strip()
+
+        return merged
 
     except FileNotFoundError:
         print(f"Error: The file '{json_path}' was not found.")
