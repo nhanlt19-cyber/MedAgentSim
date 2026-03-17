@@ -274,78 +274,60 @@ def agent_chat_v3(doctor_name, patient_name):
 
 # Function to load JSON from a file and extract speaker-text pairs
 def extract_speaker_text(json_path, doc_name, pat_name):
+    """
+    Đọc dialogue_history.json và trả về danh sách [speaker_name, text] theo đúng thứ tự.
+    Logic đơn giản hoá để UI khớp 1-1 với log:
+      - Mỗi entry Doctor/Patient trong JSON tương ứng 1 lượt nói.
+      - Bỏ 'REQUEST TEST:' và tiền tố 'Doctor:' / 'Patient:' ở đầu câu nếu có.
+      - Không cố split / gộp lại nhiều lượt từ 1 entry (tránh lẫn speaker).
+    """
     try:
-        # Load JSON data from the file
         with open(json_path, 'r', encoding='utf-8') as file:
             data = json.load(file)
 
-        corrected_conversations = []
-        buffer_text = ""
+        conversations = []
 
         for entry in data:
-            if "speaker" in entry and "text" in entry:
-                speaker = entry["speaker"]
-                
-                # Skip entries where speaker is "Measurement"
-                if speaker == "Measurement":
-                    continue
-                    
-                if speaker == "Doctor":
-                    speaker = doc_name
-                elif speaker == "Patient":
-                    speaker = pat_name
-                    
-                text = buffer_text + entry["text"]
-                buffer_text = ""
-                
-                text = re.sub(r"\bREQUEST TEST:\s*", "", text)
+            if "speaker" not in entry or "text" not in entry:
+                continue
 
-                # Regex to check if text contains an unintended speaker mention
-                match = re.search(r"\n\n(Doctor|Patient):", text)
-                if match:
-                    split_index = match.start()
-                    current_text = text[:split_index].strip()
-                    next_text = text[split_index:].strip()
+            speaker = entry["speaker"]
+            if speaker == "Measurement":
+                continue
 
-                    # Remove the "Doctor: " or "Patient: " prefix from the next text
-                    next_text = re.sub(r"^(Doctor|Patient):\s*", "", next_text).strip()
+            if speaker == "Doctor":
+                speaker = doc_name
+            elif speaker == "Patient":
+                speaker = pat_name
 
-                    # Add current speaker's corrected text
-                    corrected_conversations.append([speaker, current_text])
+            text = entry["text"] or ""
+            # Bỏ các thẻ kỹ thuật / tiền tố không cần thiết
+            text = re.sub(r"\bREQUEST TEST:\s*", "", text)
+            text = re.sub(r"^(Doctor|Patient):\s*", "", text.strip(), flags=re.IGNORECASE)
 
-                    # Buffer the next speaker's text for the next entry with a space
-                    buffer_text = next_text + " "
-                else:
-                    corrected_conversations.append([speaker, text])
-                    
-        # Remove duplicate consecutive speaker entries (keep only the latest one)
-        deduplicated_conversations = []
-        for i in range(len(corrected_conversations)):
-            if i > 0 and corrected_conversations[i][0] == corrected_conversations[i - 1][0]:
-                # Remove the previous entry and add the current one
-                deduplicated_conversations.pop()  # Remove the previous duplicate
-            deduplicated_conversations.append(corrected_conversations[i])
+            conversations.append([speaker, text])
 
-        corrected_conversations = deduplicated_conversations
-                    
-        # Process last element to remove "DIAGNOSIS READY:" section
+        if not conversations:
+            return []
+
+        # Xử lý phần "DIAGNOSIS READY" trong lượt cuối (nếu có)
         had_diagnosis = False
-        last_speaker, last_text = corrected_conversations[-1]
-        diagnosis_pattern = re.search(r"DIAGNOSIS READY:.*?\n\n", last_text, re.DOTALL)
+        last_speaker, last_text = conversations[-1]
+        diagnosis_pattern = re.search(r"DIAGNOSIS READY:.*?$", last_text, re.DOTALL | re.MULTILINE)
         if diagnosis_pattern:
             last_text = last_text.replace(diagnosis_pattern.group(), "").strip()
-            corrected_conversations[-1] = [last_speaker, last_text]
+            conversations[-1] = [last_speaker, last_text]
             had_diagnosis = True
 
-        # Nếu có chẩn đoán, thêm một lời cảm ơn tự nhiên từ bệnh nhân để kết thúc cuộc trò chuyện
-        if had_diagnosis and corrected_conversations:
+        # Nếu có chẩn đoán, thêm câu cảm ơn tự nhiên từ bệnh nhân để kết thúc
+        if had_diagnosis and conversations:
             thanks_text = (
                 f"Thank you, {doc_name}. I appreciate you explaining everything and helping me "
                 f"understand my condition. I'll follow your recommendations and head back home now."
             )
-            corrected_conversations.append([pat_name, thanks_text])
+            conversations.append([pat_name, thanks_text])
 
-        return corrected_conversations
+        return conversations
 
     except FileNotFoundError:
         print(f"Error: The file '{json_path}' was not found.")
