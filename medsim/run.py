@@ -5,6 +5,7 @@ import time
 import logging
 import sys
 from typing import Tuple, Optional
+from pathlib import Path
 
 import openai
 import yaml
@@ -154,17 +155,16 @@ def main(config: dict) -> None:
             os.environ["ANTHROPIC_API_KEY"] = anthropic_api_key
             logger.info("Set ANTHROPIC_API_KEY.")
 
-        # Set output directory with timestamp for better organization
+        # Output directory (stable across cwd changes).
+        # Default to <repo_root>/output so Reverie subprocess chdir won't affect it.
         print(config)
-        test_path = f"{os.getcwd()}\\output"#config['scenario']["output_dir"]
-
+        repo_root = Path(__file__).resolve().parents[1]  # .../MedAgentSim
+        output_dir = str(repo_root / "output")
         try:
-            os.makedirs(test_path, exist_ok=True)
-            print(f"Directory created: {test_path}")
+            os.makedirs(output_dir, exist_ok=True)
+            print(f"Directory created: {output_dir}")
         except Exception as e:
             print(f"Failed to create directory: {e}")
-        # breakpoint()
-        output_dir = test_path
         logger.info(f"Output directory set to {output_dir}.")
 
         # Load the appropriate scenario loader
@@ -242,19 +242,16 @@ def prep(config, total_scenarios, total_correct, num_scenarios, scenario_id):
             os.environ["ANTHROPIC_API_KEY"] = anthropic_api_key
             logger.info("Set ANTHROPIC_API_KEY.")
 
-        # Set output directory with timestamp for better organization
+        # Output directory (stable across cwd changes).
+        # Default to <repo_root>/output so Reverie subprocess chdir won't affect it.
         print(config)
-        # test_path = f"{os.getcwd()}\\output"#config['scenario']["output_dir"]
-        test_path = os.path.join(os.path.dirname(os.getcwd()), "output")
-
-
+        repo_root = Path(__file__).resolve().parents[1]  # .../MedAgentSim
+        output_dir = str(repo_root / "output")
         try:
-            os.makedirs(test_path, exist_ok=True)
-            print(f"Directory created: {test_path}")
+            os.makedirs(output_dir, exist_ok=True)
+            print(f"Directory created: {output_dir}")
         except Exception as e:
             print(f"Failed to create directory: {e}")
-        # breakpoint()
-        output_dir = test_path
         logger.info(f"Output directory set to {output_dir}.")
 
         # Load the appropriate scenario loader
@@ -489,7 +486,10 @@ def run_simulation_idx(
 
     # Find the next available scenario ID for output based on current run number
     start_output_scenario_id = find_next_available_scenario_id(output_dir)
-    output_scenario_id = start_output_scenario_id + (total_scenarios - 1)
+    # total_scenarios in controller may be reset between runs; be defensive.
+    # We want: if output/scenario_0 exists then next run becomes scenario_1, etc.
+    run_offset = max(int(total_scenarios) - 1, 0)
+    output_scenario_id = start_output_scenario_id + run_offset
     logger.info(f"Output scenario ID: {output_scenario_id}")
 
     # Run interaction loop
