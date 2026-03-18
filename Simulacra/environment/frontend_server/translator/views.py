@@ -19,6 +19,39 @@ from .models import *
 
 fs_temp_storage = "temp_storage"
 
+
+def simulation_status(request):
+  """
+  Lightweight status endpoint so the frontend can stop polling/rendering once
+  a diagnosis is produced (diagnosis_ready=true).
+  """
+  # Backend controller lives in Simulacra/reverie/backend_server/simulation_controller.json
+  base_dir = os.path.dirname(os.path.abspath(__file__))
+  ctrl_path = os.path.normpath(
+    os.path.join(base_dir, "..", "..", "reverie", "backend_server", "simulation_controller.json")
+  )
+  data = {
+    "diagnosis_ready": False,
+    "simulation_active": None,
+    "simulation_index": None,
+    "stop_at_step": None,
+  }
+
+  try:
+    if os.path.exists(ctrl_path):
+      with open(ctrl_path, "r") as f:
+        ctrl = json.load(f)
+      data["diagnosis_ready"] = bool(ctrl.get("diagnosis_ready"))
+      data["simulation_active"] = ctrl.get("simulation_active")
+      data["simulation_index"] = ctrl.get("simulation_index")
+      data["stop_at_step"] = ctrl.get("stop_at_step")
+    else:
+      data["error"] = "controller_not_found"
+  except Exception as e:
+    data["error"] = str(e)
+
+  return JsonResponse(data)
+
 def landing(request): 
   context = {}
   template = "landing/landing.html"

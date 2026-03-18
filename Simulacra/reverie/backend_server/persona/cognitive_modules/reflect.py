@@ -12,6 +12,8 @@ import random
 
 from numpy import dot
 from numpy.linalg import norm
+import os
+import json
 
 from global_methods import *
 from persona.prompt_template.run_gpt_prompt import *
@@ -193,6 +195,26 @@ def reflect(persona):
   if persona.scratch.chatting_end_time: 
     # print("DEBUG", persona.scratch.curr_time + datetime.timedelta(0,10))
     if persona.scratch.curr_time + datetime.timedelta(0,10) == persona.scratch.chatting_end_time: 
+      # Optional: skip post-chat memory writes for faster termination after diagnosis.
+      # This block is only used to generate "planning thought" and "memo" from the chat,
+      # which is not needed for the diagnosis benchmark / fast simulate runs.
+      try:
+        if os.environ.get("REVERIE_DISABLE_POSTCHAT_MEMORY", "").strip().lower() in ("1", "true", "yes"):
+          return
+      except Exception:
+        pass
+      try:
+        current_file_dir = os.path.dirname(os.path.abspath(__file__))
+        ctrl_path = os.path.normpath(os.path.join(current_file_dir, "../..", "simulation_controller.json"))
+        if os.path.exists(ctrl_path):
+          with open(ctrl_path, "r") as f:
+            ctrl = json.load(f)
+          if ctrl.get("diagnosis_ready"):
+            return
+      except Exception:
+        # If we can't read the controller, fall back to original behavior.
+        pass
+
       # print ("KABOOOOOMMMMMMM")
       all_utt = ""
       if persona.scratch.chat: 

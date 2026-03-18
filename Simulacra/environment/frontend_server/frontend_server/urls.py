@@ -25,6 +25,7 @@ urlpatterns = [
     url(r'^$', translator_views.landing, name='landing'),
     url(r'^test_chat_ui$', translator_views.test_chat_ui, name='test_chat_ui'),
     url(r'^simulator_home$', translator_views.home, name='home'),
+    url(r'^simulation_status$', translator_views.simulation_status, name='simulation_status'),
     url(r'^demo/(?P<sim_code>[\w-]+)/(?P<step>[\w-]+)/(?P<play_speed>[\w-]+)/$', translator_views.demo, name='demo'),
     url(r'^replay/(?P<sim_code>[\w-]+)/(?P<step>[\w-]+)/$', translator_views.replay, name='replay'),
     url(r'^replay_persona_state/(?P<sim_code>[\w-]+)/(?P<step>[\w-]+)/(?P<persona_name>[\w-]+)/$', translator_views.replay_persona_state, name='replay_persona_state'),

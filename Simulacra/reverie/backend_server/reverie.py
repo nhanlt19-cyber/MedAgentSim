@@ -497,28 +497,59 @@ class ReverieServer:
           self.step += 1
           self.curr_time += datetime.timedelta(seconds=self.sec_per_step)
 
-          # Sau khi đã có chẩn đoán và stream hết hội thoại ra frontend,
-          # cho phép mô phỏng chạy thêm một số bước để bệnh nhân / bác sĩ
-          # có thể rời khỏi phòng (trông tự nhiên hơn) rồi mới dừng hẳn.
+          # Sau khi đã có chẩn đoán, dừng mô phỏng sớm để backend thoát nhanh.
+          #
+          # Mặc định: dừng sau vài bước (để kịp ghi movement ra frontend).
+          # Có thể override bằng biến môi trường:
+          # - REVERIE_STOP_AFTER_DIAGNOSIS_STEPS: số bước dư sau khi thấy diagnosis_ready (mặc định 5)
+          # - REVERIE_WAIT_CHAT_STREAMED: "1"/"true" để CHỜ phát xong toàn bộ hội thoại trước khi dừng (mặc định false)
           try:
             ctrl_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "simulation_controller.json")
             if os.path.exists(ctrl_path):
               with open(ctrl_path, "r") as f:
                 ctrl = json.load(f)
               if ctrl.get("diagnosis_ready"):
-                chat_streamed = False
-                for p in self.personas.values():
-                  cf = getattr(p.scratch, "chat_full", None)
-                  idx = getattr(p.scratch, "chat_step_idx", 0)
-                  if cf is not None and len(cf) > 0 and idx >= len(cf):
-                    chat_streamed = True
-                    break
-                # Nếu đã phát xong toàn bộ hội thoại, đặt mốc dừng sau N bước
-                if chat_streamed:
-                  extra_steps = ctrl.get("extra_steps_after_chat", 40)
+                # Optional: wait until chat has been fully streamed to frontend.
+                wait_chat_streamed = os.environ.get("REVERIE_WAIT_CHAT_STREAMED", "").strip().lower() in (
+                  "1",
+                  "true",
+                  "yes",
+                )
+                if wait_chat_streamed:
+                  chat_streamed = False
+                  for p in self.personas.values():
+                    cf = getattr(p.scratch, "chat_full", None)
+                    idx = getattr(p.scratch, "chat_step_idx", 0)
+                    if cf is not None and len(cf) > 0 and idx >= len(cf):
+                      chat_streamed = True
+                      break
+                  if not chat_streamed:
+                    # keep sim running a bit until chat is streamed
+                    pass
+                  else:
+                    # Once streamed, stop soon.
+                    stop_after = os.environ.get("REVERIE_STOP_AFTER_DIAGNOSIS_STEPS", "").strip()
+                    try:
+                      stop_after_steps = int(stop_after) if stop_after else 5
+                    except Exception:
+                      stop_after_steps = 5
+                    stop_at_step = ctrl.get("stop_at_step")
+                    if stop_at_step is None:
+                      ctrl["stop_at_step"] = self.step + stop_after_steps
+                      with open(ctrl_path, "w") as f:
+                        json.dump(ctrl, f, indent=2)
+                    elif self.step >= stop_at_step:
+                      self.set_simulation_inactive(ctrl_path)
+                else:
+                  # Default: stop quickly after diagnosis, without waiting for full chat streaming.
+                  stop_after = os.environ.get("REVERIE_STOP_AFTER_DIAGNOSIS_STEPS", "").strip()
+                  try:
+                    stop_after_steps = int(stop_after) if stop_after else 5
+                  except Exception:
+                    stop_after_steps = 5
                   stop_at_step = ctrl.get("stop_at_step")
                   if stop_at_step is None:
-                    ctrl["stop_at_step"] = self.step + int(extra_steps)
+                    ctrl["stop_at_step"] = self.step + stop_after_steps
                     with open(ctrl_path, "w") as f:
                       json.dump(ctrl, f, indent=2)
                   elif self.step >= stop_at_step:

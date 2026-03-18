@@ -33,6 +33,23 @@
 	  return div.innerHTML;
 	}
 
+	function formatChatForDisplay(rawText) {
+	  let text = (rawText || "").toString().trim();
+	  if (!text) return "";
+
+	  // Make final diagnosis lines look natural in UI.
+	  // Examples:
+	  //   "DIAGNOSIS READY: Diffuse large B-cell lymphoma"
+	  //   "Diagnosis ready: Acute pyelonephritis"
+	  const m = text.match(/diagnosis\s*ready\s*:\s*(.+)$/i);
+	  if (m && m[1]) {
+	    const dx = m[1].trim().replace(/\s+/g, " ");
+	    return "<strong>Final diagnosis:</strong> " + escapeHtml(dx);
+	  }
+
+	  return escapeHtml(text);
+	}
+
 	// <step> -- one full loop around all three phases determined by <phase> is 
 	// a step. We use this to link the steps in the backend. 
 	let step = parseInt(document.getElementById('step').innerHTML);
@@ -131,6 +148,27 @@
 	let execute_count_max = tile_width/movement_speed;
 	let execute_count = execute_count_max;
 	let movement_target = {};
+
+	// Stop frontend updates once diagnosis is ready.
+	let simulationStopped = false;
+	let status_timer_max = 10; // check status every N frames (lightweight)
+	let status_timer = status_timer_max;
+	function stopSimulationFrontend(reason) {
+	  if (simulationStopped) return;
+	  simulationStopped = true;
+	  try {
+	    console.log("Simulation stopped on frontend:", reason || "diagnosis_ready");
+	  } catch (e) {}
+	  // Pause the phaser scene to stop movement updates.
+	  try { game.scene.pause(); } catch (e) {}
+	  // Optional: show a small notice if container exists.
+	  try {
+	    let el = document.getElementById("game-time-content");
+	    if (el) {
+	      el.innerHTML = (el.innerHTML || "") + " (stopped)";
+	    }
+	  } catch (e) {}
+	}
 	
 
 	// ###########################################################################
@@ -343,6 +381,10 @@
 
 
 	function update(time, delta) {
+		// If already stopped, keep the screen static.
+		if (simulationStopped) {
+		  return;
+		}
 		// *** SETUP PLAY AND PAUSE BUTTON *** 
 		let play_context = this;
 		function game_resume() {  
@@ -393,6 +435,28 @@
 	  // Moving personas take place in three distinct phases: "process," "update,"
 	  // and "execute." These phases are determined by the value of <phase>. 
 	  // Only one of the three phases is incurred in each update cycle. 
+	  // Before polling for new movement, periodically check diagnosis_ready and stop UI.
+	  if (status_timer <= 0) {
+	    status_timer = status_timer_max;
+	    try {
+	      var status_xobj = new XMLHttpRequest();
+	      status_xobj.overrideMimeType("application/json");
+	      status_xobj.open('GET', "{% url 'simulation_status' %}", true);
+	      status_xobj.addEventListener("load", function() {
+	        if (this.readyState === 4 && status_xobj.status === 200) {
+	          let st = {};
+	          try { st = JSON.parse(status_xobj.responseText); } catch (e) { st = {}; }
+	          if (st && st["diagnosis_ready"]) {
+	            stopSimulationFrontend("diagnosis_ready");
+	          }
+	        }
+	      });
+	      status_xobj.send(null);
+	    } catch (e) {}
+	  } else {
+	    status_timer = status_timer - 1;
+	  }
+
 	  if (phase == "process") {
 	    // "process" takes all current locations of the personas and send them to
 	    // the frontend server in a json form. Here, we first create the json 
@@ -592,7 +656,7 @@
 		          let isFirstPersona = (speaker === persona_key_list[0]);
 		          let bubbleClass = isFirstPersona ? "chat-bubble chat-bubble-left" : "chat-bubble chat-bubble-right";
 		          let label = isFirstPersona ? "Doctor" : "Patient";
-		          chat_content += "<div class=\"" + bubbleClass + "\"><strong>" + label + ":</strong> " + escapeHtml(text) + "</div>";
+		          chat_content += "<div class=\"" + bubbleClass + "\"><strong>" + label + ":</strong> " + formatChatForDisplay(text) + "</div>";
 		        }
 		        globalChatContent = chat_content;
 		      }
