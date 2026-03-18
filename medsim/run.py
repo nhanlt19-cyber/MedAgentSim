@@ -4,6 +4,7 @@ import json
 import time
 import logging
 import sys
+import re
 from typing import Tuple, Optional
 from pathlib import Path
 
@@ -34,6 +35,44 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+_ROLE_PREFIX_RE = re.compile(r"^\s*(Doctor(?:\s*\d+)?|Patient)\s*:\s*", re.IGNORECASE)
+
+
+def _sanitize_role_contamination(text: str, speaker: str) -> str:
+    """
+    Some model responses accidentally include both roles in one message
+    (e.g., Patient response contains lines starting with 'Doctor:').
+    Keep only content that belongs to the current speaker and strip redundant prefixes.
+    """
+    raw = (text or "").replace("\r\n", "\n").strip()
+    if not raw:
+        return ""
+
+    speaker_norm = (speaker or "").strip().lower()
+    chunks = [c.strip() for c in re.split(r"\n\s*\n", raw) if c and c.strip()]
+    if not chunks:
+        chunks = [raw]
+
+    kept: list[str] = []
+    for chunk in chunks:
+        m = _ROLE_PREFIX_RE.match(chunk)
+        if m:
+            role = (m.group(1) or "").lower()
+            is_doctor_chunk = role.startswith("doctor")
+            is_patient_chunk = role.startswith("patient")
+            # Drop chunks that explicitly belong to the opposite role.
+            if speaker_norm == "doctor" and is_patient_chunk:
+                continue
+            if speaker_norm == "patient" and is_doctor_chunk:
+                continue
+            # Strip own-role marker.
+            chunk = _ROLE_PREFIX_RE.sub("", chunk, count=1).strip()
+        if chunk:
+            kept.append(chunk)
+
+    # Fallback to original text if everything got filtered out.
+    return "\n\n".join(kept).strip() if kept else raw
 
 
 def _read_human_input(prompt: str) -> str:
@@ -574,6 +613,9 @@ def run_interaction_loop(
                 pi_dialogue, image_requested=imgs_requested, scenario_id=scenario_id#, thread_id=inf_id
             )
 
+        # Normalize accidental role-mixed outputs before logging/storing.
+        doctor_dialogue = _sanitize_role_contamination(doctor_dialogue, "Doctor")
+
         # Log and store doctor's dialogue (print giống CLI để khi gọi từ simulate thấy cùng format)
         dialogue_text = (
             f"Doctor [{int(((inf_id + 1) / total_inferences) * 100)}%]: {doctor_dialogue}"
@@ -657,6 +699,7 @@ def run_interaction_loop(
                 pi_dialogue = _read_human_input("\nResponse to doctor: ")
             else:
                 pi_dialogue = patient_agent.inference_patient(doctor_dialogue)
+            pi_dialogue = _sanitize_role_contamination(pi_dialogue, "Patient")
             patient_text = (
                 f"Patient [{int(((inf_id + 1) / total_inferences) * 100)}%]: {pi_dialogue}"
             )
