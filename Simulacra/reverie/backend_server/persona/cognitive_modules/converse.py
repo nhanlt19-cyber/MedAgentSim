@@ -352,8 +352,8 @@ def extract_speaker_text(json_path, doc_name, pat_name):
         if not conversations:
             return []
 
-        # Bỏ các dòng chẩn đoán kỹ thuật để UI hiển thị hội thoại "thuần".
-        conversations = [[spk, txt] for spk, txt in conversations if txt and "DIAGNOSIS READY" not in txt.upper()]
+        # Keep the final diagnosis line so the frontend can display it.
+        conversations = [[spk, txt] for spk, txt in conversations if txt]
 
         # Merge consecutive turns by same speaker (optional, keeps UI compact)
         merged: list[list[str]] = []

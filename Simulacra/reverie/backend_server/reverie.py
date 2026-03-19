@@ -501,7 +501,7 @@ class ReverieServer:
           #
           # Mặc định: dừng sau vài bước (để kịp ghi movement ra frontend).
           # Có thể override bằng biến môi trường:
-          # - REVERIE_STOP_AFTER_DIAGNOSIS_STEPS: số bước dư sau khi thấy diagnosis_ready (mặc định 5)
+          # - REVERIE_STOP_AFTER_DIAGNOSIS_STEPS: số bước dư sau khi thấy diagnosis_ready (mặc định 0)
           # - REVERIE_WAIT_CHAT_STREAMED: "1"/"true" để CHỜ phát xong toàn bộ hội thoại trước khi dừng (mặc định false)
           try:
             ctrl_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "simulation_controller.json")
@@ -530,9 +530,9 @@ class ReverieServer:
                     # Once streamed, stop soon.
                     stop_after = os.environ.get("REVERIE_STOP_AFTER_DIAGNOSIS_STEPS", "").strip()
                     try:
-                      stop_after_steps = int(stop_after) if stop_after else 5
+                      stop_after_steps = int(stop_after) if stop_after else 0
                     except Exception:
-                      stop_after_steps = 5
+                      stop_after_steps = 0
                     stop_at_step = ctrl.get("stop_at_step")
                     if stop_at_step is None:
                       ctrl["stop_at_step"] = self.step + stop_after_steps
@@ -541,17 +541,21 @@ class ReverieServer:
                     elif self.step >= stop_at_step:
                       self.set_simulation_inactive(ctrl_path)
                 else:
-                  # Default: stop quickly after diagnosis, without waiting for full chat streaming.
+                  # Default: stop immediately after diagnosis (no movement needed).
                   stop_after = os.environ.get("REVERIE_STOP_AFTER_DIAGNOSIS_STEPS", "").strip()
                   try:
-                    stop_after_steps = int(stop_after) if stop_after else 5
+                    stop_after_steps = int(stop_after) if stop_after else 0
                   except Exception:
-                    stop_after_steps = 5
+                    stop_after_steps = 0
                   stop_at_step = ctrl.get("stop_at_step")
                   if stop_at_step is None:
-                    ctrl["stop_at_step"] = self.step + stop_after_steps
-                    with open(ctrl_path, "w") as f:
-                      json.dump(ctrl, f, indent=2)
+                    # If no extra steps are desired, stop now.
+                    if int(stop_after_steps) <= 0:
+                      self.set_simulation_inactive(ctrl_path)
+                    else:
+                      ctrl["stop_at_step"] = self.step + stop_after_steps
+                      with open(ctrl_path, "w") as f:
+                        json.dump(ctrl, f, indent=2)
                   elif self.step >= stop_at_step:
                     self.set_simulation_inactive(ctrl_path)
           except Exception:

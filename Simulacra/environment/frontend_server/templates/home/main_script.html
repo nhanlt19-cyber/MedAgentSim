@@ -151,6 +151,8 @@
 
 	// Stop frontend updates once diagnosis is ready.
 	let simulationStopped = false;
+	let diagnosisReadyFlag = false;
+	let diagnosisRendered = false;
 	let status_timer_max = 10; // check status every N frames (lightweight)
 	let status_timer = status_timer_max;
 	function stopSimulationFrontend(reason) {
@@ -447,7 +449,11 @@
 	          let st = {};
 	          try { st = JSON.parse(status_xobj.responseText); } catch (e) { st = {}; }
 	          if (st && st["diagnosis_ready"]) {
-	            stopSimulationFrontend("diagnosis_ready");
+	            diagnosisReadyFlag = true;
+	            // Stop only after the diagnosis line has been rendered at least once.
+	            if (diagnosisRendered) {
+	              stopSimulationFrontend("diagnosis_ready_rendered");
+	            }
 	          }
 	        }
 	      });
@@ -656,6 +662,9 @@
 		          let isFirstPersona = (speaker === persona_key_list[0]);
 		          let bubbleClass = isFirstPersona ? "chat-bubble chat-bubble-left" : "chat-bubble chat-bubble-right";
 		          let label = isFirstPersona ? "Doctor" : "Patient";
+		          if (/diagnosis\s*ready\s*:/i.test(text || "")) {
+		            diagnosisRendered = true;
+		          }
 		          chat_content += "<div class=\"" + bubbleClass + "\"><strong>" + label + ":</strong> " + formatChatForDisplay(text) + "</div>";
 		        }
 		        globalChatContent = chat_content;
@@ -690,6 +699,11 @@
 	            globalContainer.style.display = "block";
 	          }
 	        }
+	      }
+
+	      // If backend flagged diagnosis ready and we have rendered it, stop now.
+	      if (diagnosisReadyFlag && diagnosisRendered) {
+	        stopSimulationFrontend("diagnosis_ready_rendered");
 	      }
 	    }
 

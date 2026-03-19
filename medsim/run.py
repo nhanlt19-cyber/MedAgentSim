@@ -589,6 +589,7 @@ def run_interaction_loop(
     """
     doctor_dialogue = ""
     is_correct = False
+    controller_written = False
 
     for inf_id in range(total_inferences):
         # Determine if images are requested
@@ -656,6 +657,25 @@ def run_interaction_loop(
                 dialogue_history.append({"speaker": "Doctor", "text": doctor_dialogue})
 
         if "DIAGNOSIS READY" in doctor_dialogue.upper():
+            # Mark diagnosis_ready for Reverie/Frontend to stop immediately.
+            # This is intentionally written here (MedSim side) so we don't rely on
+            # Reverie parsing the streamed chat to detect diagnosis.
+            if not controller_written:
+                try:
+                    repo_root = Path(__file__).resolve().parents[1]  # .../MedAgentSim
+                    ctrl_path = repo_root / "Simulacra" / "reverie" / "backend_server" / "simulation_controller.json"
+                    if ctrl_path.exists():
+                        ctrl = json.loads(ctrl_path.read_text(encoding="utf-8"))
+                    else:
+                        ctrl = {}
+                    ctrl["diagnosis_ready"] = True
+                    # Stop as soon as possible; reverie.py will respect this.
+                    ctrl.setdefault("stop_at_step", None)
+                    ctrl_path.write_text(json.dumps(ctrl, indent=2), encoding="utf-8")
+                    controller_written = True
+                except Exception:
+                    pass
+
             # Compare results
             result = compare_results(
                 doctor_dialogue,
