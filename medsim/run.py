@@ -617,6 +617,28 @@ def run_interaction_loop(
         # Normalize accidental role-mixed outputs before logging/storing.
         doctor_dialogue = _sanitize_role_contamination(doctor_dialogue, "Doctor")
 
+        # If doctor outputs a meta-instruction (low quality), retry once with a stricter prompt.
+        if (
+            "DIAGNOSIS READY" not in doctor_dialogue.upper()
+            and "REQUEST TEST" not in doctor_dialogue.upper()
+            and re.search(r"\bcontinue\s+your\s+dialogue\b", doctor_dialogue, re.IGNORECASE)
+        ):
+            try:
+                retry_prompt = (
+                    "INSTRUCTION:\n"
+                    "Do NOT output meta instructions like 'continue your dialogue'.\n"
+                    "Ask ONE medically relevant follow-up question to clarify the patient's condition.\n"
+                    "Output ONLY the question.\n"
+                )
+                doctor_dialogue = doctor_agent.inference_doctor(
+                    (pi_dialogue + "\n" + retry_prompt),
+                    image_requested=imgs_requested,
+                    scenario_id=scenario_id,
+                )
+                doctor_dialogue = _sanitize_role_contamination(doctor_dialogue, "Doctor")
+            except Exception:
+                pass
+
         # Log and store doctor's dialogue (print giống CLI để khi gọi từ simulate thấy cùng format)
         dialogue_text = (
             f"Doctor [{int(((inf_id + 1) / total_inferences) * 100)}%]: {doctor_dialogue}"
@@ -669,8 +691,8 @@ def run_interaction_loop(
                     else:
                         ctrl = {}
                     ctrl["diagnosis_ready"] = True
-                    # Stop as soon as possible; reverie.py will respect this.
-                    ctrl.setdefault("stop_at_step", None)
+                    # Clear any stale stop marker from previous runs so Reverie can stop immediately.
+                    ctrl["stop_at_step"] = None
                     ctrl_path.write_text(json.dumps(ctrl, indent=2), encoding="utf-8")
                     controller_written = True
                 except Exception:

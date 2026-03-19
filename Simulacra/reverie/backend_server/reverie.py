@@ -533,13 +533,21 @@ class ReverieServer:
                       stop_after_steps = int(stop_after) if stop_after else 0
                     except Exception:
                       stop_after_steps = 0
-                    stop_at_step = ctrl.get("stop_at_step")
-                    if stop_at_step is None:
-                      ctrl["stop_at_step"] = self.step + stop_after_steps
+                    # If no extra steps are desired, stop immediately (ignore stale stop_at_step).
+                    if int(stop_after_steps) <= 0:
+                      # Clear stale stop marker to avoid future runs waiting on it.
+                      ctrl["stop_at_step"] = None
                       with open(ctrl_path, "w") as f:
                         json.dump(ctrl, f, indent=2)
-                    elif self.step >= stop_at_step:
                       self.set_simulation_inactive(ctrl_path)
+                    else:
+                      stop_at_step = ctrl.get("stop_at_step")
+                      if stop_at_step is None:
+                        ctrl["stop_at_step"] = self.step + stop_after_steps
+                        with open(ctrl_path, "w") as f:
+                          json.dump(ctrl, f, indent=2)
+                      elif self.step >= stop_at_step:
+                        self.set_simulation_inactive(ctrl_path)
                 else:
                   # Default: stop immediately after diagnosis (no movement needed).
                   stop_after = os.environ.get("REVERIE_STOP_AFTER_DIAGNOSIS_STEPS", "").strip()
@@ -547,17 +555,20 @@ class ReverieServer:
                     stop_after_steps = int(stop_after) if stop_after else 0
                   except Exception:
                     stop_after_steps = 0
-                  stop_at_step = ctrl.get("stop_at_step")
-                  if stop_at_step is None:
-                    # If no extra steps are desired, stop now.
-                    if int(stop_after_steps) <= 0:
-                      self.set_simulation_inactive(ctrl_path)
-                    else:
+                  # If no extra steps are desired, stop immediately (ignore stale stop_at_step).
+                  if int(stop_after_steps) <= 0:
+                    ctrl["stop_at_step"] = None
+                    with open(ctrl_path, "w") as f:
+                      json.dump(ctrl, f, indent=2)
+                    self.set_simulation_inactive(ctrl_path)
+                  else:
+                    stop_at_step = ctrl.get("stop_at_step")
+                    if stop_at_step is None:
                       ctrl["stop_at_step"] = self.step + stop_after_steps
                       with open(ctrl_path, "w") as f:
                         json.dump(ctrl, f, indent=2)
-                  elif self.step >= stop_at_step:
-                    self.set_simulation_inactive(ctrl_path)
+                    elif self.step >= stop_at_step:
+                      self.set_simulation_inactive(ctrl_path)
           except Exception:
             pass
 
