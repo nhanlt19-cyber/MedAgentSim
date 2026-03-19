@@ -336,7 +336,13 @@ def run_scenarios(num_scenarios: int, delay: int = 5):
             # Therefore we set `simulation_index` to the auto-incremented output_scenario_id.
             update_json_file(
                 SIMULATION_CONTROLLER_PATH,
-                {"simulation_index": output_scenario_id, "diagnosis_ready": False},
+                {
+                    "simulation_active": 1,
+                    "simulation_index": output_scenario_id,
+                    # Reset stop flags from previous runs so a new scenario can stream normally.
+                    "diagnosis_ready": False,
+                    "stop_at_step": None,
+                },
             )
             
             # Setup for this scenario - use auto-incremented ID
