@@ -12,6 +12,8 @@ import math
 import sys
 import datetime
 import random
+import os
+import json
 sys.path.append('../')
 
 from global_methods import *
@@ -216,6 +218,24 @@ class Persona:
           != curr_time.strftime('%A %B %d')):
       new_day = "New day"
     self.scratch.curr_time = curr_time
+
+    # If diagnosis has been produced, freeze the simulation: no more planning/movement.
+    # We only advance chat (if any) so the frontend can display the final diagnosis line.
+    try:
+      ctrl_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "simulation_controller.json")
+      ctrl_path = os.path.normpath(ctrl_path)
+      if os.path.exists(ctrl_path):
+        with open(ctrl_path, "r") as f:
+          ctrl = json.load(f)
+        if ctrl.get("diagnosis_ready"):
+          if getattr(self.scratch, "chat_full", None):
+            self.scratch.advance_chat()
+          # Keep current tile; return a stable description so UI doesn't "move".
+          pron = getattr(self.scratch, "act_pronunciatio", None) or "⏹"
+          desc = getattr(self.scratch, "act_description", None) or "stopped"
+          return self.scratch.curr_tile, pron, desc
+    except Exception:
+      pass
 
     # Main cognitive sequence begins here. 
     perceived = self.perceive(maze)
