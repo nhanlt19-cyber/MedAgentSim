@@ -530,9 +530,14 @@ class ReverieServer:
                     # Once streamed, stop soon.
                     stop_after = os.environ.get("REVERIE_STOP_AFTER_DIAGNOSIS_STEPS", "").strip()
                     try:
-                      stop_after_steps = int(stop_after) if stop_after else 0
+                      # Default: allow enough steps to stream chat content.
+                      # Persona is frozen after diagnosis, so this should not cause movement/LLM calls.
+                      stop_after_steps = int(stop_after) if stop_after else 500
                     except Exception:
-                      stop_after_steps = 0
+                      stop_after_steps = 500
+                    # Safety: never stop immediately just because an env var is set to 0.
+                    if int(stop_after_steps) <= 0:
+                      stop_after_steps = 500
                     # If no extra steps are desired, stop immediately (ignore stale stop_at_step).
                     if int(stop_after_steps) <= 0:
                       # Clear stale stop marker to avoid future runs waiting on it.
@@ -552,9 +557,13 @@ class ReverieServer:
                   # Default: stop immediately after diagnosis (no movement needed).
                   stop_after = os.environ.get("REVERIE_STOP_AFTER_DIAGNOSIS_STEPS", "").strip()
                   try:
-                    stop_after_steps = int(stop_after) if stop_after else 0
+                    # Default: allow enough steps to stream chat content.
+                    stop_after_steps = int(stop_after) if stop_after else 500
                   except Exception:
-                    stop_after_steps = 0
+                    stop_after_steps = 500
+                  # Safety: never stop immediately just because an env var is set to 0.
+                  if int(stop_after_steps) <= 0:
+                    stop_after_steps = 500
                   # If no extra steps are desired, stop immediately (ignore stale stop_at_step).
                   if int(stop_after_steps) <= 0:
                     ctrl["stop_at_step"] = None

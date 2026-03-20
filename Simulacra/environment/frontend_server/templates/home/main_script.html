@@ -448,6 +448,10 @@
 	        if (this.readyState === 4 && status_xobj.status === 200) {
 	          let st = {};
 	          try { st = JSON.parse(status_xobj.responseText); } catch (e) { st = {}; }
+	          if (st && st["simulation_active"] === 0) {
+	            stopSimulationFrontend("simulation_inactive");
+	            return;
+	          }
 	          if (st && st["diagnosis_ready"]) {
 	            diagnosisReadyFlag = true;
 	            // Stop only after the diagnosis line has been rendered at least once.
@@ -636,6 +640,9 @@
 	      // Thứ tự persona: phần tử đầu = doctor (bong bóng trái), thứ hai = patient (bong bóng phải)
 	      let persona_key_list = Object.keys(personas);
 	      let globalChatContent = "";
+	      let bestChatList = null;
+	      let bestChatLen = -1;
+	      let firstPersonaKey = (persona_key_list[0] || "").trim();
 
 	      for (let i=0; i<persona_key_list.length; i++) {
 	        let curr_persona_name = (persona_key_list[i] || "").trim();
@@ -647,28 +654,14 @@
 	        if (!personaMove) continue;
 	        let description_content = personaMove["description"] || "";
 
-	        // Lấy hội thoại global từ persona đầu tiên có chat != null
-	        if (!globalChatContent && personaMove["chat"] != null ){
-		        let chat_list = personaMove["chat"];
-		        let chat_content = "";
-		        for (let j=0; j<chat_list.length; j++) {
-		          let speaker = chat_list[j][0];
-		          let text = chat_list[j][1] || "";
-		          // Nhiều dòng hội thoại trong JSON đã có sẵn tiền tố "Doctor:" / "Patient:"
-		          // Trong UI ta đã gán nhãn bong bóng (Doctor/Patient) nên bỏ tiền tố này để tránh
-		          // các chuỗi kiểu "Doctor: Patient: ...".
-		          text = text.replace(/^(Doctor|Patient):\s*/i, "");
-		          // Bong bóng trái (doctor) = persona đầu tiên, bong bóng phải (patient) = persona thứ hai
-		          let isFirstPersona = (speaker === persona_key_list[0]);
-		          let bubbleClass = isFirstPersona ? "chat-bubble chat-bubble-left" : "chat-bubble chat-bubble-right";
-		          let label = isFirstPersona ? "Doctor" : "Patient";
-		          if (/diagnosis\s*ready\s*:/i.test(text || "")) {
-		            diagnosisRendered = true;
-		          }
-		          chat_content += "<div class=\"" + bubbleClass + "\"><strong>" + label + ":</strong> " + formatChatForDisplay(text) + "</div>";
-		        }
-		        globalChatContent = chat_content;
-		      }
+	        // Chọn persona nào có tiến độ chat cao nhất (chat dài nhất) để render
+	        if (personaMove["chat"] != null && Array.isArray(personaMove["chat"])) {
+	          let chat_list = personaMove["chat"];
+	          if (chat_list.length > bestChatLen) {
+	            bestChatLen = chat_list.length;
+	            bestChatList = chat_list;
+	          }
+	        }
 
 	        // Cập nhật thông tin action/location cho từng persona nếu có khung UI
 	        let actionEl = document.getElementById("current_action__"+curr_persona_name_os);
@@ -686,6 +679,24 @@
 	          actionEl.innerHTML = simplifiedAction || rawAction;
 	          locEl.innerHTML = (description_content.split("@")[1] || "").trim();
 	        }
+	      }
+
+	      // Render chat global từ persona stream tiến độ cao nhất
+	      if (bestChatList && bestChatList.length > 0) {
+	        let chat_content = "";
+	        for (let j=0; j<bestChatList.length; j++) {
+	          let speaker = bestChatList[j][0];
+	          let text = bestChatList[j][1] || "";
+	          text = text.replace(/^(Doctor|Patient):\s*/i, "");
+	          let isFirstPersona = (speaker === firstPersonaKey);
+	          let bubbleClass = isFirstPersona ? "chat-bubble chat-bubble-left" : "chat-bubble chat-bubble-right";
+	          let label = isFirstPersona ? "Doctor" : "Patient";
+	          if (/diagnosis\s*ready\s*:/i.test(text || "")) {
+	            diagnosisRendered = true;
+	          }
+	          chat_content += "<div class=\"" + bubbleClass + "\"><strong>" + label + ":</strong> " + formatChatForDisplay(text) + "</div>";
+	        }
+	        globalChatContent = chat_content;
 	      }
 
 	      // Ghi hội thoại vào khung global nếu đã có ít nhất một lượt chat

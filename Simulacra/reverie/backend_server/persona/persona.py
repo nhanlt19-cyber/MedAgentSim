@@ -228,8 +228,21 @@ class Persona:
         with open(ctrl_path, "r") as f:
           ctrl = json.load(f)
         if ctrl.get("diagnosis_ready"):
-          if getattr(self.scratch, "chat_full", None):
-            self.scratch.advance_chat()
+          cf = getattr(self.scratch, "chat_full", None)
+          if cf:
+            # Stream chat one step at a time without doing any movement/planning.
+            if getattr(self.scratch, "chat_step_idx", 0) < len(cf):
+              self.scratch.advance_chat()
+
+            # If we've finished streaming the entire chat, stop the simulation.
+            if getattr(self.scratch, "chat_step_idx", 0) >= len(cf):
+              try:
+                ctrl["simulation_active"] = 0
+                with open(ctrl_path, "w") as f:
+                  json.dump(ctrl, f, indent=2)
+              except Exception:
+                pass
+
           # Keep current tile; return a stable description so UI doesn't "move".
           pron = getattr(self.scratch, "act_pronunciatio", None) or "⏹"
           desc = getattr(self.scratch, "act_description", None) or "stopped"
