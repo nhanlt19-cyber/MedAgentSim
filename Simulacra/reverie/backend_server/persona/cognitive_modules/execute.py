@@ -30,6 +30,53 @@ def _cached_path_finder(collision_maze, start_tile, end_tile, block_id):
   _PATH_CACHE[key] = path
   return path
 
+def _parse_tile_env(key: str, default_xy):
+  raw = os.environ.get(key, "").strip()
+  if not raw:
+    return list(default_xy)
+  try:
+    x_str, y_str = raw.split(",")
+    return [int(x_str.strip()), int(y_str.strip())]
+  except Exception:
+    return list(default_xy)
+
+def _seat_tile_for_consultation(persona, maze, personas, plan):
+  """
+  Anchor doctor/patient to stable tiles in Dentistry room while conversing.
+  """
+  if "<persona>" not in plan:
+    return None
+
+  try:
+    other_name = plan.split("<persona>")[-1].strip()
+  except Exception:
+    other_name = ""
+  if not other_name or other_name not in personas:
+    return None
+
+  try:
+    me_det = maze.access_tile(persona.scratch.curr_tile) or {}
+    other_det = maze.access_tile(personas[other_name].scratch.curr_tile) or {}
+    me_arena = str(me_det.get("arena", "")).strip().lower()
+    other_arena = str(other_det.get("arena", "")).strip().lower()
+  except Exception:
+    return None
+
+  target_arena = "dentistry consultation room"
+  if target_arena not in me_arena and target_arena not in other_arena:
+    return None
+
+  doc_name = "Maria Lopez"
+  pat_name = "Klaus Mueller"
+  doc_tile = _parse_tile_env("DENTISTRY_DOCTOR_SEAT_TILE", (49, 25))
+  pat_tile = _parse_tile_env("DENTISTRY_PATIENT_SEAT_TILE", (52, 25))
+
+  if persona.name.strip().lower() == doc_name.lower():
+    return doc_tile
+  if persona.name.strip().lower() == pat_name.lower():
+    return pat_tile
+  return None
+
 def execute(persona, maze, personas, plan): 
   """
   Given a plan (action's string address), we execute the plan (actually 
@@ -73,10 +120,15 @@ def execute(persona, maze, personas, plan):
 
     try:
       if "<persona>" in plan:
-        # Jump next to the other persona (same tile is OK for demo)
-        other_name = plan.split("<persona>")[-1].strip()
-        if other_name in personas and getattr(personas[other_name].scratch, "curr_tile", None) is not None:
-          target_tile = personas[other_name].scratch.curr_tile
+        # Prefer fixed consultation seats in dentistry room for stable visuals.
+        seat_tile = _seat_tile_for_consultation(persona, maze, personas, plan)
+        if seat_tile is not None:
+          target_tile = seat_tile
+        else:
+          # Fall back to "jump near the other persona".
+          other_name = plan.split("<persona>")[-1].strip()
+          if other_name in personas and getattr(personas[other_name].scratch, "curr_tile", None) is not None:
+            target_tile = personas[other_name].scratch.curr_tile
       elif "<waiting>" in plan:
         parts = plan.split()
         if len(parts) >= 3:
@@ -119,27 +171,31 @@ def execute(persona, maze, personas, plan):
 
     if "<persona>" in plan: 
       # Executing persona-persona interaction.
-      target_p_tile = (personas[plan.split("<persona>")[-1].strip()]
-                       .scratch.curr_tile)
-      potential_path = _cached_path_finder(maze.collision_maze, 
-                                   persona.scratch.curr_tile, 
-                                   target_p_tile, 
-                                   collision_block_id)
-      if len(potential_path) <= 2: 
-        target_tiles = [potential_path[0]]
-      else: 
-        potential_1 = _cached_path_finder(maze.collision_maze, 
-                                persona.scratch.curr_tile, 
-                                potential_path[int(len(potential_path)/2)], 
-                                collision_block_id)
-        potential_2 = _cached_path_finder(maze.collision_maze, 
-                                persona.scratch.curr_tile, 
-                                potential_path[int(len(potential_path)/2)+1], 
-                                collision_block_id)
-        if len(potential_1) <= len(potential_2): 
-          target_tiles = [potential_path[int(len(potential_path)/2)]]
+      seat_tile = _seat_tile_for_consultation(persona, maze, personas, plan)
+      if seat_tile is not None:
+        target_tiles = [seat_tile]
+      else:
+        target_p_tile = (personas[plan.split("<persona>")[-1].strip()]
+                         .scratch.curr_tile)
+        potential_path = _cached_path_finder(maze.collision_maze, 
+                                     persona.scratch.curr_tile, 
+                                     target_p_tile, 
+                                     collision_block_id)
+        if len(potential_path) <= 2: 
+          target_tiles = [potential_path[0]]
         else: 
-          target_tiles = [potential_path[int(len(potential_path)/2+1)]]
+          potential_1 = _cached_path_finder(maze.collision_maze, 
+                                  persona.scratch.curr_tile, 
+                                  potential_path[int(len(potential_path)/2)], 
+                                  collision_block_id)
+          potential_2 = _cached_path_finder(maze.collision_maze, 
+                                  persona.scratch.curr_tile, 
+                                  potential_path[int(len(potential_path)/2)+1], 
+                                  collision_block_id)
+          if len(potential_1) <= len(potential_2): 
+            target_tiles = [potential_path[int(len(potential_path)/2)]]
+          else: 
+            target_tiles = [potential_path[int(len(potential_path)/2+1)]]
     
     elif "<waiting>" in plan: 
       # Executing interaction where the persona has decided to wait before 
