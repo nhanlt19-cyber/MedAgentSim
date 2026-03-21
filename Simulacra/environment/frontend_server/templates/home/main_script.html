@@ -65,6 +65,13 @@
 		persona_names[personaName] = [parseInt(x[1]), parseInt(x[2])]
 	}
 
+  // Primary clinical pair used in current demo scenarios.
+  const DOCTOR_NAME = "Maria Lopez";
+  const PATIENT_NAME = "Klaus Mueller";
+  // Default consultation seat tiles in Dentistry room.
+  const DENTISTRY_DOC_SEAT = { x: 49, y: 25 };
+  const DENTISTRY_PAT_SEAT = { x: 52, y: 25 };
+
 
 	// Phaser 3.0 global settings. 
 	// Configuration meant to be passed to the main Phaser game instance. 
@@ -534,6 +541,8 @@
 	      if (!curr_persona_name) continue;
 	      let curr_persona = personas[curr_persona_name];
 	      let curr_pronunciatio = pronunciatios[curr_persona_name];
+        let isDoctor = (curr_persona_name === DOCTOR_NAME);
+        let isPatient = (curr_persona_name === PATIENT_NAME);
 
 	      if (execute_count == execute_count_max) { 
 	        let personaMove = execute_movement
@@ -597,8 +606,12 @@
 	        	anims_direction = "";
 	        }
 
-	        curr_pronunciatio.x = curr_persona.body.x - 6; 
-          curr_pronunciatio.y = curr_persona.body.y - 42 - 32; // DEBUG 1 --- I added 32 offset on Dec 29. 
+	        // Keep DOC/PAT bubbles visually separated from each other and from sprites.
+          let bubbleOffsetX = -6;
+          if (isDoctor) bubbleOffsetX = -34;
+          if (isPatient) bubbleOffsetX = 16;
+	        curr_pronunciatio.x = curr_persona.body.x + bubbleOffsetX; 
+          curr_pronunciatio.y = curr_persona.body.y - 42 - 36;
 
           if (anims_direction == "l") {
 			      curr_persona.anims.play("misa-left-walk", true);
@@ -611,11 +624,52 @@
 			    } else {
 			      curr_persona.anims.stop();
 
-			      // If we were moving, pick an idle frame to use
-			      if (pre_anims_direction_dict[curr_persona_name] == "l") curr_persona.setTexture("atlas", "misa-left");else
-			      if (pre_anims_direction_dict[curr_persona_name] == "r") curr_persona.setTexture("atlas", "misa-right");else
-			      if (pre_anims_direction_dict[curr_persona_name] == "u") curr_persona.setTexture("atlas", "misa-back");else
-			      if (pre_anims_direction_dict[curr_persona_name] == "d") curr_persona.setTexture("atlas", "misa-front");
+			      // Make doctor/patient face each other only when:
+            // - they are in active chat, and
+            // - both are at dentistry consultation seats.
+            let facingApplied = false;
+            if ((isDoctor || isPatient) && personas[DOCTOR_NAME] && personas[PATIENT_NAME]) {
+              let docSprite = personas[DOCTOR_NAME];
+              let patSprite = personas[PATIENT_NAME];
+              let docMove = execute_movement
+                && execute_movement["persona"]
+                && execute_movement["persona"][DOCTOR_NAME];
+              let patMove = execute_movement
+                && execute_movement["persona"]
+                && execute_movement["persona"][PATIENT_NAME];
+              let hasChat = false;
+              if (docMove && Array.isArray(docMove["chat"]) && docMove["chat"].length > 0) hasChat = true;
+              if (patMove && Array.isArray(patMove["chat"]) && patMove["chat"].length > 0) hasChat = true;
+
+              let docSeatPxX = DENTISTRY_DOC_SEAT.x * tile_width;
+              let docSeatPxY = DENTISTRY_DOC_SEAT.y * tile_width;
+              let patSeatPxX = DENTISTRY_PAT_SEAT.x * tile_width;
+              let patSeatPxY = DENTISTRY_PAT_SEAT.y * tile_width;
+              let near = tile_width;
+              let docAtSeat = (Math.abs(docSprite.body.x - docSeatPxX) <= near
+                            && Math.abs(docSprite.body.y - docSeatPxY) <= near);
+              let patAtSeat = (Math.abs(patSprite.body.x - patSeatPxX) <= near
+                            && Math.abs(patSprite.body.y - patSeatPxY) <= near);
+
+              if (hasChat && docAtSeat && patAtSeat) {
+                let dxDocToPat = patSprite.body.x - docSprite.body.x;
+                if (isDoctor) {
+                  curr_persona.setTexture("atlas", dxDocToPat >= 0 ? "misa-right" : "misa-left");
+                  facingApplied = true;
+                } else if (isPatient) {
+                  curr_persona.setTexture("atlas", dxDocToPat >= 0 ? "misa-left" : "misa-right");
+                  facingApplied = true;
+                }
+              }
+            }
+
+			      // Fallback: keep previous idle direction.
+            if (!facingApplied) {
+			        if (pre_anims_direction_dict[curr_persona_name] == "l") curr_persona.setTexture("atlas", "misa-left");else
+			        if (pre_anims_direction_dict[curr_persona_name] == "r") curr_persona.setTexture("atlas", "misa-right");else
+			        if (pre_anims_direction_dict[curr_persona_name] == "u") curr_persona.setTexture("atlas", "misa-back");else
+			        if (pre_anims_direction_dict[curr_persona_name] == "d") curr_persona.setTexture("atlas", "misa-front");
+            }
 			    };
 
 	      } 
