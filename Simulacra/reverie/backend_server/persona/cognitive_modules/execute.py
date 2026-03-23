@@ -68,8 +68,11 @@ def _seat_tile_for_consultation(persona, maze, personas, plan):
 
   doc_name = "Maria Lopez"
   pat_name = "Klaus Mueller"
+  # Map data: only one "chair" object in Dentistry (32247) at (49,25), west of desk.
+  # Desk is (52,25). East side has no second chair object in CSV; use first walkable
+  # tile past the desk partition (red chair left / white chair right in the tile art).
   doc_tile = _parse_tile_env("DENTISTRY_DOCTOR_SEAT_TILE", (49, 25))
-  pat_tile = _parse_tile_env("DENTISTRY_PATIENT_SEAT_TILE", (52, 25))
+  pat_tile = _parse_tile_env("DENTISTRY_PATIENT_SEAT_TILE", (55, 25))
 
   if persona.name.strip().lower() == doc_name.lower():
     return doc_tile
