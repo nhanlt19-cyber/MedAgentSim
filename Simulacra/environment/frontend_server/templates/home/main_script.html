@@ -68,10 +68,15 @@
   // Primary clinical pair used in current demo scenarios.
   const DOCTOR_NAME = "Maria Lopez";
   const PATIENT_NAME = "Klaus Mueller";
-  // Default consultation seat tiles in Dentistry room.
+  // Default consultation seat tiles in Dentistry room (bay k=0; bays repeat every 9 tiles on X).
+  const DENTISTRY_BAY_PITCH = 9;
   const DENTISTRY_DOC_SEAT = { x: 49, y: 25 };
-  // Match backend defaults: chair object west of desk; walkable tile east (white chair).
+  // Match backend: chair west of desk; walkable tile east of partition (white chair).
   const DENTISTRY_PAT_SEAT = { x: 55, y: 25 };
+  // Align movement targets with spawn (sprite body uses tile center X, feet offset Y).
+  function personaTargetPxFromTile(tx, ty, tw) {
+    return [tx * tw + tw / 2, ty * tw + tw];
+  }
 
 
 	// Phaser 3.0 global settings. 
@@ -537,6 +542,22 @@
 	    // The execute_count_max is computed by tile_width/movement_speed, which
 	    // defines a one step sequence in this world. 
 	    document.getElementById("game-time-content").innerHTML = execute_movement["meta"]["curr_time"];
+	    let dentistryBayK = 0;
+	    if (execute_movement["meta"] && execute_movement["meta"]["dentistry_bay_k"] != null) {
+	      dentistryBayK = Math.max(0, Math.min(6, parseInt(execute_movement["meta"]["dentistry_bay_k"], 10) || 0));
+	    } else if (execute_movement["persona"]) {
+	      let dm = execute_movement["persona"][DOCTOR_NAME];
+	      let pm = execute_movement["persona"][PATIENT_NAME];
+	      let xs = [];
+	      if (dm && dm["movement"] && dm["movement"][1] === 25) xs.push(dm["movement"][0]);
+	      if (pm && pm["movement"] && pm["movement"][1] === 25) xs.push(pm["movement"][0]);
+	      if (xs.length) {
+	        let refX = xs.reduce((a, b) => a + b, 0) / xs.length;
+	        dentistryBayK = Math.max(0, Math.min(6, Math.round((refX - 52) / DENTISTRY_BAY_PITCH)));
+	      }
+	    }
+	    let docSeatDyn = { x: DENTISTRY_DOC_SEAT.x + DENTISTRY_BAY_PITCH * dentistryBayK, y: DENTISTRY_DOC_SEAT.y };
+	    let patSeatDyn = { x: DENTISTRY_PAT_SEAT.x + DENTISTRY_BAY_PITCH * dentistryBayK, y: DENTISTRY_PAT_SEAT.y };
 	    for (let i=0; i<Object.keys(personas).length; i++) {
 	      let curr_persona_name = (Object.keys(personas)[i] || "").trim();
 	      if (!curr_persona_name) continue;
@@ -552,8 +573,7 @@
 	        if (!personaMove) continue;
 	        let curr_x = personaMove["movement"][0];
 	        let curr_y = personaMove["movement"][1];
-	        movement_target[curr_persona_name] = [curr_x * tile_width, 
-	                                              curr_y * tile_width]; 
+	        movement_target[curr_persona_name] = personaTargetPxFromTile(curr_x, curr_y, tile_width);
 	        let pronunciatio_content = personaMove["pronunciatio"] || "";
 	        // This is what gives the pronunciatio balloon the name initials. We 
 	        // use regex to extract the initials of the personas. 
@@ -642,10 +662,10 @@
               if (docMove && Array.isArray(docMove["chat"]) && docMove["chat"].length > 0) hasChat = true;
               if (patMove && Array.isArray(patMove["chat"]) && patMove["chat"].length > 0) hasChat = true;
 
-              let docSeatPxX = DENTISTRY_DOC_SEAT.x * tile_width;
-              let docSeatPxY = DENTISTRY_DOC_SEAT.y * tile_width;
-              let patSeatPxX = DENTISTRY_PAT_SEAT.x * tile_width;
-              let patSeatPxY = DENTISTRY_PAT_SEAT.y * tile_width;
+              let docSeatPxX = docSeatDyn.x * tile_width + tile_width / 2;
+              let docSeatPxY = docSeatDyn.y * tile_width + tile_width;
+              let patSeatPxX = patSeatDyn.x * tile_width + tile_width / 2;
+              let patSeatPxY = patSeatDyn.y * tile_width + tile_width;
               let near = tile_width;
               let docAtSeat = (Math.abs(docSprite.body.x - docSeatPxX) <= near
                             && Math.abs(docSprite.body.y - docSeatPxY) <= near);

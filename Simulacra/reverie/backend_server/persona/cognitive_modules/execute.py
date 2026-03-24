@@ -40,6 +40,31 @@ def _parse_tile_env(key: str, default_xy):
   except Exception:
     return list(default_xy)
 
+def _dentistry_bay_pitch_and_desk_base():
+  """Repeated consultation bays along X in Hospital Dentistry (see arena / object maze)."""
+  try:
+    pitch = int(os.environ.get("DENTISTRY_BAY_PITCH", "9") or "9")
+  except Exception:
+    pitch = 9
+  try:
+    desk_base_x = int(os.environ.get("DENTISTRY_DESK_BASE_X", "52") or "52")
+  except Exception:
+    desk_base_x = 52
+  return pitch, desk_base_x
+
+def _dentistry_bay_k_from_ref_x(ref_x, max_bay=6):
+  """Pick bay by closest desk column (more stable than rounding at bay boundaries)."""
+  pitch, desk_base_x = _dentistry_bay_pitch_and_desk_base()
+  best_k = 0
+  best_d = 10**9
+  for k in range(max_bay + 1):
+    dx = desk_base_x + pitch * k
+    d = abs(ref_x - dx)
+    if d < best_d:
+      best_d = d
+      best_k = k
+  return best_k
+
 def _seat_tile_for_consultation(persona, maze, personas, plan):
   """
   Anchor doctor/patient to stable tiles in Dentistry room while conversing.
@@ -68,11 +93,20 @@ def _seat_tile_for_consultation(persona, maze, personas, plan):
 
   doc_name = "Maria Lopez"
   pat_name = "Klaus Mueller"
-  # Map data: only one "chair" object in Dentistry (32247) at (49,25), west of desk.
-  # Desk is (52,25). East side has no second chair object in CSV; use first walkable
-  # tile past the desk partition (red chair left / white chair right in the tile art).
-  doc_tile = _parse_tile_env("DENTISTRY_DOCTOR_SEAT_TILE", (49, 25))
-  pat_tile = _parse_tile_env("DENTISTRY_PATIENT_SEAT_TILE", (55, 25))
+  # Map: several identical bays: doctor chair (32247) at 49+9k, desk at 52+9k, patient
+  # sit tile east of partition at 55+9k (y=25). Env vars are anchors for bay k=0 only.
+  pitch, _desk_base_x = _dentistry_bay_pitch_and_desk_base()
+  base_doc = _parse_tile_env("DENTISTRY_DOCTOR_SEAT_TILE", (49, 25))
+  base_pat = _parse_tile_env("DENTISTRY_PATIENT_SEAT_TILE", (55, 25))
+  try:
+    t_doc = list(personas[doc_name].scratch.curr_tile)
+    t_pat = list(personas[pat_name].scratch.curr_tile)
+    ref_x = (int(t_doc[0]) + int(t_pat[0])) // 2
+    k = _dentistry_bay_k_from_ref_x(ref_x)
+  except Exception:
+    k = 0
+  doc_tile = [base_doc[0] + pitch * k, base_doc[1]]
+  pat_tile = [base_pat[0] + pitch * k, base_pat[1]]
 
   if persona.name.strip().lower() == doc_name.lower():
     return doc_tile
