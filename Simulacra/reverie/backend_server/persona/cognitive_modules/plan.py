@@ -775,6 +775,18 @@ def _should_react(persona, retrieved, personas):
               <Persona> instance as values. 
   """
   def lets_talk(init_persona, target_persona, retrieved):
+    def _is_dentistry_clinical_pair(p1, p2):
+      names = {p1.name.strip().lower(), p2.name.strip().lower()}
+      return names == {"maria lopez", "klaus mueller"}
+
+    def _in_dentistry_consultation_room(p):
+      try:
+        det = maze.access_tile(p.scratch.curr_tile) or {}
+        arena = str(det.get("arena", "")).strip().lower()
+        return "dentistry consultation room" in arena
+      except Exception:
+        return False
+
     if (not target_persona.scratch.act_address 
         or not target_persona.scratch.act_description
         or not init_persona.scratch.act_address
@@ -797,6 +809,15 @@ def _should_react(persona, retrieved, personas):
 
     if (target_persona.name in init_persona.scratch.chatting_with_buffer): 
       if init_persona.scratch.chatting_with_buffer[target_persona.name] > 0: 
+        return False
+
+    # Clinical demo rule:
+    # Doctor/patient should only begin their dialogue after both have reached
+    # the dentistry consultation room. This prevents "meeting in the hallway"
+    # and lets the active chat action seat them inside the room first.
+    if _is_dentistry_clinical_pair(init_persona, target_persona):
+      if not (_in_dentistry_consultation_room(init_persona)
+              and _in_dentistry_consultation_room(target_persona)):
         return False
 
     if generate_decide_to_talk(init_persona, target_persona, retrieved): 
@@ -929,24 +950,9 @@ def _chat_react(maze, persona, focused_event, reaction_mode, personas):
   # Actually creating the conversation here. 
   convo, duration_min = generate_convo(maze, init_persona, target_persona)
 
-  # Thử căn lại vị trí doctor / patient quanh bàn khám để trông tự nhiên hơn.
-  # Với scenario bệnh viện hiện tại, ta hard-code toạ độ ghế ước lượng:
-  # Doctor (Maria Lopez) ở bên trái bàn, Patient (Klaus Mueller) ở bên phải.
-  try:
-    if init_persona.name == "Maria Lopez" and target_persona.name == "Klaus Mueller":
-      doctor_seat = [47, 24]
-      patient_seat = [49, 24]
-      init_persona.scratch.curr_tile = doctor_seat
-      target_persona.scratch.curr_tile = patient_seat
-    elif init_persona.name == "Klaus Mueller" and target_persona.name == "Maria Lopez":
-      doctor_seat = [47, 24]
-      patient_seat = [49, 24]
-      target_persona.scratch.curr_tile = doctor_seat
-      init_persona.scratch.curr_tile = patient_seat
-  except Exception:
-    # Nếu có lỗi (thiếu curr_tile, v.v.) thì bỏ qua, dùng vị trí mặc định.
-    pass
-  # Khởi động hội thoại nhiều lượt; mỗi bước simulate sẽ hiện thêm 1 câu
+  # Do not mutate curr_tile here.
+  # Seating is resolved by execute.py from the active "<persona>" action so the
+  # backend maze, frontend sprite, and chat stream stay in sync.
   init_persona.scratch.start_chat(convo)
   target_persona.scratch.start_chat(convo)
 

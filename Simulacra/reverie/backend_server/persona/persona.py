@@ -207,6 +207,32 @@ class Persona:
     # Updating persona's scratch memory with <curr_tile>. 
     self.scratch.curr_tile = curr_tile
 
+    def _ready_to_stream_active_chat():
+      if not getattr(self.scratch, "chat_full", None):
+        return False
+      if getattr(self.scratch, "chatting_with", None) is None:
+        return False
+      if getattr(self.scratch, "act_event", None) is None:
+        return False
+      if len(self.scratch.act_event) < 2 or self.scratch.act_event[1] != "chat with":
+        return False
+
+      other = personas.get(self.scratch.chatting_with)
+      if other is None or getattr(other.scratch, "curr_tile", None) is None:
+        return False
+
+      my_plan = getattr(self.scratch, "act_address", "") or ""
+      other_plan = getattr(other.scratch, "act_address", "") or f"<persona> {self.name}"
+      my_seat = _seat_tile_for_consultation(self, maze, personas, my_plan)
+      other_seat = _seat_tile_for_consultation(other, maze, personas, other_plan)
+
+      # Non-dentistry chats can stream immediately as before.
+      if my_seat is None or other_seat is None:
+        return True
+
+      return (list(self.scratch.curr_tile) == list(my_seat)
+              and list(other.scratch.curr_tile) == list(other_seat))
+
     # We figure out whether the persona started a new day, and if it is a new
     # day, whether it is the very first day of the simulation. This is 
     # important because we set up the persona's long term plan at the start of
@@ -230,9 +256,16 @@ class Persona:
         if ctrl.get("diagnosis_ready"):
           cf = getattr(self.scratch, "chat_full", None)
           if cf:
-            # Stream chat one step at a time without doing any movement/planning.
-            if getattr(self.scratch, "chat_step_idx", 0) < len(cf):
-              self.scratch.advance_chat()
+            if _ready_to_stream_active_chat():
+              # Stream chat one step at a time without doing any movement/planning.
+              if getattr(self.scratch, "chat_step_idx", 0) < len(cf):
+                self.scratch.advance_chat()
+            else:
+              # Diagnosis may already be ready while the pair is still walking
+              # toward the consultation seats. Let the active chat action finish
+              # seating them before freezing the stream.
+              if getattr(self.scratch, "chatting_with", None):
+                return self.execute(maze, personas, self.scratch.act_address)
 
             # If we've finished streaming the entire chat, stop the simulation.
             if getattr(self.scratch, "chat_step_idx", 0) >= len(cf):
@@ -249,6 +282,22 @@ class Persona:
           return self.scratch.curr_tile, pron, desc
     except Exception:
       pass
+
+    active_chat = bool(getattr(self.scratch, "chat_full", None)
+                       and getattr(self.scratch, "chatting_with", None))
+    if active_chat:
+      # Clinical conversation flow:
+      # 1. While chat action exists but seats are not reached yet, keep executing
+      #    movement so doctor/patient can walk into the consultation room seats.
+      # 2. Once both are seated, stream one utterance per step and keep them still.
+      if _ready_to_stream_active_chat():
+        if getattr(self.scratch, "chat_step_idx", 0) < len(self.scratch.chat_full):
+          self.scratch.advance_chat()
+          pron = getattr(self.scratch, "act_pronunciatio", None) or "💬"
+          desc = getattr(self.scratch, "act_description", None) or "chatting"
+          return self.scratch.curr_tile, pron, desc
+      else:
+        return self.execute(maze, personas, self.scratch.act_address)
 
     # Main cognitive sequence begins here. 
     perceived = self.perceive(maze)
