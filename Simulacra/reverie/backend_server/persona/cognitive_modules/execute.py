@@ -129,6 +129,31 @@ def _direct_tile_for_dentistry_room(persona, plan):
     return _parse_tile_env("DENTISTRY_PATIENT_SEAT_TILE", (52, 25))
   return None
 
+def _consultation_path_override(persona, target_tile, maze):
+  """
+  Guide the patient around the top side of the desk before settling into the
+  white chair, instead of cutting through the doctor / desk line visually.
+  """
+  name = persona.name.strip().lower()
+  patient_seat = _parse_tile_env("DENTISTRY_PATIENT_SEAT_TILE", (52, 25))
+  if name != "klaus mueller" or list(target_tile) != list(patient_seat):
+    return None
+
+  curr = list(persona.scratch.curr_tile)
+  if curr == list(patient_seat):
+    return [tuple(curr)]
+
+  # Approach from above, then step back down into the seat.
+  via_tile = [patient_seat[0], max(22, patient_seat[1] - 2)]
+  try:
+    path_a = _cached_path_finder(maze.collision_maze, curr, via_tile, collision_block_id)
+    path_b = _cached_path_finder(maze.collision_maze, via_tile, patient_seat, collision_block_id)
+    if path_a and path_b:
+      return path_a + path_b[1:]
+  except Exception:
+    return None
+  return None
+
 def execute(persona, maze, personas, plan): 
   """
   Given a plan (action's string address), we execute the plan (actually 
@@ -325,11 +350,18 @@ def execute(persona, maze, personas, plan):
     collision_maze = maze.collision_maze
     closest_target_tile = None
     path = None
+    if len(target_tiles) == 1:
+      override_path = _consultation_path_override(persona, target_tiles[0], maze)
+      if override_path:
+        closest_target_tile = target_tiles[0]
+        path = override_path
     for i in target_tiles: 
       # path_finder takes a collision_mze and the curr_tile coordinate as 
       # an input, and returns a list of coordinate tuples that becomes the
       # path. 
       # e.g., [(0, 1), (1, 1), (1, 2), (1, 3), (1, 4)...]
+      if path is not None:
+        break
       curr_path = _cached_path_finder(maze.collision_maze, 
                               curr_tile, 
                               i, 
