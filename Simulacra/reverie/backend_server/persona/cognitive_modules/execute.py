@@ -102,7 +102,9 @@ def _seat_tile_for_consultation(persona, maze, personas, plan):
   # Use the configured seat tiles directly instead of inferring a repeated bay,
   # otherwise the patient may drift into the neighboring room.
   base_doc = _parse_tile_env("DENTISTRY_DOCTOR_SEAT_TILE", (49, 25))
-  base_pat = _parse_tile_env("DENTISTRY_PATIENT_SEAT_TILE", (55, 25))
+  # Only x=45..53 belongs to this consultation room; x=55 is already the next room.
+  # The nearest valid in-room tile on the patient's side is x=52.
+  base_pat = _parse_tile_env("DENTISTRY_PATIENT_SEAT_TILE", (52, 25))
   doc_tile = list(base_doc)
   pat_tile = list(base_pat)
 
@@ -124,7 +126,7 @@ def _direct_tile_for_dentistry_room(persona, plan):
   if name == "maria lopez":
     return _parse_tile_env("DENTISTRY_DOCTOR_SEAT_TILE", (49, 25))
   if name == "klaus mueller":
-    return _parse_tile_env("DENTISTRY_PATIENT_SEAT_TILE", (55, 25))
+    return _parse_tile_env("DENTISTRY_PATIENT_SEAT_TILE", (52, 25))
   return None
 
 def execute(persona, maze, personas, plan): 
