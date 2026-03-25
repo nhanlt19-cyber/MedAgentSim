@@ -8,6 +8,21 @@ from medsim.core.agent import MeasurementAgent, PatientAgent, DoctorAgent, compa
 from medsim.core.scenario import *
 from medsim.query_model import *
 
+def _apply_env_model_overrides(doctor_llm, patient_llm, measurement_llm, moderator_llm):
+    """
+    Allow exact remote model names to override CLI defaults when running
+    medsim/main.py directly.
+    Priority:
+    1. <ROLE>_LLM_MODEL
+    2. REMOTE_LLM_MODEL
+    """
+    shared = (os.environ.get("REMOTE_LLM_MODEL") or "").strip()
+    doctor_llm = (os.environ.get("DOCTOR_LLM_MODEL") or "").strip() or shared or doctor_llm
+    patient_llm = (os.environ.get("PATIENT_LLM_MODEL") or "").strip() or shared or patient_llm
+    measurement_llm = (os.environ.get("MEASUREMENT_LLM_MODEL") or "").strip() or shared or measurement_llm
+    moderator_llm = (os.environ.get("MODERATOR_LLM_MODEL") or "").strip() or shared or moderator_llm
+    return doctor_llm, patient_llm, measurement_llm, moderator_llm
+
 try:
     # Prefer the shared implementation used by medsim.run / medsim.simulate
     from medsim.run import find_next_available_scenario_id
@@ -84,6 +99,10 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
     if server_token:
         os.environ["SERVER_TOKEN"] = server_token
 
+    doctor_llm, patient_llm, measurement_llm, moderator_llm = _apply_env_model_overrides(
+        doctor_llm, patient_llm, measurement_llm, moderator_llm
+    )
+
     # Default to a local ./output folder for portability (Windows/Linux/macOS).
     output_dir = output_dir or os.path.join(os.getcwd(), "output")
     os.makedirs(output_dir, exist_ok=True)
@@ -105,6 +124,10 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
     patient_llm = resolve_model_name(patient_llm)
     measurement_llm = resolve_model_name(measurement_llm)
     moderator_llm = resolve_model_name(moderator_llm)
+    print(
+        f"Effective LLMs: Doctor={doctor_llm}, Patient={patient_llm}, "
+        f"Measurement={measurement_llm}, Moderator={moderator_llm}"
+    )
     total_correct = 0
     total_presents = 0
 
