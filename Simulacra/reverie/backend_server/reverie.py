@@ -478,26 +478,13 @@ class ReverieServer:
           # movements dictionary. 
           movements["meta"]["curr_time"] = (self.curr_time 
                                              .strftime("%B %d, %Y, %H:%M:%S"))
-          # Dentistry: repeating consultation bays every 9 tiles on X; frontend aligns
-          # seat checks / facing to the correct bay.
+          # Dentistry clinical demo: keep doctor/patient in one fixed consultation
+          # room, so frontend facing logic should use bay 0 consistently.
           try:
             _doc_n = "Maria Lopez"
             _pat_n = "Klaus Mueller"
             if _doc_n in self.personas_tile and _pat_n in self.personas_tile:
-              _x1 = int(self.personas_tile[_doc_n][0])
-              _x2 = int(self.personas_tile[_pat_n][0])
-              _ref = (_x1 + _x2) // 2
-              _pitch = int(os.environ.get("DENTISTRY_BAY_PITCH", "9") or "9")
-              _desk = int(os.environ.get("DENTISTRY_DESK_BASE_X", "52") or "52")
-              _best_k = 0
-              _best_d = 10**9
-              for _kk in range(7):
-                _dx = _desk + _pitch * _kk
-                _dd = abs(_ref - _dx)
-                if _dd < _best_d:
-                  _best_d = _dd
-                  _best_k = _kk
-              movements["meta"]["dentistry_bay_k"] = _best_k
+              movements["meta"]["dentistry_bay_k"] = 0
             else:
               movements["meta"]["dentistry_bay_k"] = 0
           except Exception:

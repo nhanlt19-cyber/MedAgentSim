@@ -98,25 +98,13 @@ def _seat_tile_for_consultation(persona, maze, personas, plan):
   if not is_clinical_pair:
     return None
 
-  # Map: several identical bays: doctor chair (32247) at 49+9k, desk at 52+9k, patient
-  # sit tile east of partition at 55+9k (y=25). Env vars are anchors for bay k=0 only.
-  pitch, _desk_base_x = _dentistry_bay_pitch_and_desk_base()
+  # Clinical demo rule: keep the pair in one exact consultation room.
+  # Use the configured seat tiles directly instead of inferring a repeated bay,
+  # otherwise the patient may drift into the neighboring room.
   base_doc = _parse_tile_env("DENTISTRY_DOCTOR_SEAT_TILE", (49, 25))
   base_pat = _parse_tile_env("DENTISTRY_PATIENT_SEAT_TILE", (55, 25))
-  try:
-    # If at least one persona is already in Dentistry, snap to that bay.
-    # Otherwise, default to bay 0 so both agents head straight to the same room.
-    if target_arena in me_arena or target_arena in other_arena:
-      t_doc = list(personas[doc_name].scratch.curr_tile)
-      t_pat = list(personas[pat_name].scratch.curr_tile)
-      ref_x = (int(t_doc[0]) + int(t_pat[0])) // 2
-      k = _dentistry_bay_k_from_ref_x(ref_x)
-    else:
-      k = 0
-  except Exception:
-    k = 0
-  doc_tile = [base_doc[0] + pitch * k, base_doc[1]]
-  pat_tile = [base_pat[0] + pitch * k, base_pat[1]]
+  doc_tile = list(base_doc)
+  pat_tile = list(base_pat)
 
   if persona.name.strip().lower() == doc_name.lower():
     return doc_tile
