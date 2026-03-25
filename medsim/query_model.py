@@ -35,7 +35,7 @@ logger.setLevel(logging.INFO)
 class BAgent:
     def __init__(
         self,
-        model_name="meta-llama/Llama-3.2-3B-Instruct",  # rarely used when Ollama/remote is enabled
+        model_name=None,  # allow env-driven default model selection
         server_url: str | None = None,
         server_token: str | None = None,
         ollama_url: str | None = None,
@@ -59,6 +59,12 @@ class BAgent:
         """
         # allow overrides via environment variables so users don't have to touch every
         # call site in the codebase
+        if model_name is None:
+            model_name = (
+                os.environ.get("REMOTE_LLM_MODEL")
+                or os.environ.get("DEFAULT_LLM_MODEL")
+                or "meta-llama/Llama-3.2-3B-Instruct"
+            )
         self.server_url = server_url or os.environ.get(
             "SERVER_URL", "http://localhost:8012/v1/chat/completions"
         )

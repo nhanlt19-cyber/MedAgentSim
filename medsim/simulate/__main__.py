@@ -66,6 +66,22 @@ except ImportError:
             logger.warning(f"Error finding next scenario ID: {e}")
         return max_id + 1
     def apply_model_selection_overrides(config):
+        """
+        Local fallback so medsim.simulate still honors remote model overrides
+        even when importing medsim.run fails.
+        """
+        if not isinstance(config, dict):
+            return config
+        language_models = config.setdefault("language_models", {})
+        remote_llm = config.get("remote_llm") or {}
+        shared_env_model = (os.environ.get("REMOTE_LLM_MODEL") or "").strip()
+        shared_cfg_model = str(remote_llm.get("model") or "").strip()
+        for role in ("doctor", "patient", "measurement", "moderator"):
+            role_env_model = (os.environ.get(f"{role.upper()}_LLM_MODEL") or "").strip()
+            role_cfg_model = str(remote_llm.get(f"{role}_model") or "").strip()
+            override = role_env_model or shared_env_model or role_cfg_model or shared_cfg_model
+            if override:
+                language_models[role] = override
         return config
 
 # Mapping of dataset names to their loader classes
