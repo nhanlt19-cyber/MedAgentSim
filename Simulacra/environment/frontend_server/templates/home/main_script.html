@@ -356,9 +356,9 @@
 	                                   new_sprite.body.x - 6, 
 	                                   new_sprite.body.y - 42 - 32, // DEBUG 1 --- I added 32 offset on Dec 29. 
 	                                   "🦁", {
-	                                   font: "28px monospace", 
+	                                   font: "20px monospace", 
 	                                   fill: "#000000", 
-	                                   padding: { x: 8, y: 8}, 
+	                                   padding: { x: 4, y: 4}, 
 	                                   backgroundColor: "#ffffff",
 	                                   border:"solid",
 	                                   borderRadius:"10px"}).setDepth(3);
@@ -622,10 +622,10 @@
 
 	        // Keep DOC/PAT bubbles visually separated from each other and from sprites.
           let bubbleOffsetX = -6;
-          if (isDoctor) bubbleOffsetX = -34;
-          if (isPatient) bubbleOffsetX = 16;
+          if (isDoctor) bubbleOffsetX = -24;
+          if (isPatient) bubbleOffsetX = 12;
 	        curr_pronunciatio.x = curr_persona.body.x + bubbleOffsetX; 
-          curr_pronunciatio.y = curr_persona.body.y - 42 - 36;
+          curr_pronunciatio.y = curr_persona.body.y - 42 - 52;
 
           if (anims_direction == "l") {
 			      curr_persona.anims.play("misa-left-walk", true);
@@ -642,6 +642,7 @@
             // - they are in active chat, and
             // - both are at dentistry consultation seats.
             let facingApplied = false;
+            let seatedClinicalPair = false;
             if ((isDoctor || isPatient) && personas[DOCTOR_NAME] && personas[PATIENT_NAME]) {
               let docSprite = personas[DOCTOR_NAME];
               let patSprite = personas[PATIENT_NAME];
@@ -668,6 +669,7 @@
               // Once the clinical pair is seated in Dentistry, keep them facing
               // one another. Active chat is sufficient but no longer required.
               if (docAtSeat && patAtSeat) {
+                seatedClinicalPair = true;
                 let dxDocToPat = patSprite.body.x - docSprite.body.x;
                 if (isDoctor) {
                   curr_persona.setTexture("atlas", dxDocToPat >= 0 ? "misa-right" : "misa-left");
@@ -677,6 +679,10 @@
                   facingApplied = true;
                 }
               }
+            }
+
+            if (seatedClinicalPair && (isDoctor || isPatient)) {
+              curr_pronunciatio.setText((isDoctor ? "DOC" : "PAT") + ": 💬");
             }
 
 			      // Fallback: keep previous idle direction.
