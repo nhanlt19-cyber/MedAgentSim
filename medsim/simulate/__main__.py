@@ -45,7 +45,7 @@ from medsim.core.scenario import (
 
 # Import auto-increment function from medsim.run
 try:
-    from medsim.run import find_next_available_scenario_id
+    from medsim.run import find_next_available_scenario_id, apply_model_selection_overrides
 except ImportError:
     logger.warning("Could not import find_next_available_scenario_id from medsim.run")
     def find_next_available_scenario_id(output_dir):
@@ -65,6 +65,8 @@ except ImportError:
         except Exception as e:
             logger.warning(f"Error finding next scenario ID: {e}")
         return max_id + 1
+    def apply_model_selection_overrides(config):
+        return config
 
 # Mapping of dataset names to their loader classes
 SCENARIO_LOADERS = {
@@ -297,7 +299,8 @@ def run_scenarios(num_scenarios: int, delay: int = 5):
                 "Frontend not reachable at http://127.0.0.1:8000/. "
                 "Start it first: python -m medsim.server (keep it running)."
             )
-        if not check_ollama_reachable():
+        remote_server_configured = bool(os.environ.get("SERVER_URL"))
+        if (not remote_server_configured) and (not check_ollama_reachable()):
             logger.warning(
                 "Ollama is not reachable at http://localhost:11434. "
                 "The simulation will hang when Reverie calls the LLM. Start Ollama first "
@@ -404,6 +407,7 @@ def main():
         # Load configuration
         logger.info(f"Loading configuration from {CONFIG_PATH}")
         config = load_config(CONFIG_PATH)
+        config = apply_model_selection_overrides(config)
         
         # If config specifies a remote LLM server, export it so BAgent picks it up
         if config.get("remote_llm"):

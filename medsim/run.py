@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 _ROLE_PREFIX_RE = re.compile(r"^\s*(Doctor(?:\s*\d+)?|Patient)\s*:\s*", re.IGNORECASE)
+_LLM_ROLES = ("doctor", "patient", "measurement", "moderator")
 
 
 def _sanitize_role_contamination(text: str, speaker: str) -> str:
@@ -121,6 +122,37 @@ def load_config(config_path: str) -> dict:
         logger.error(f"Error parsing YAML file: {exc}")
         raise
 
+def apply_model_selection_overrides(config: dict) -> dict:
+    """
+    Allow exact remote model names to be selected without code changes.
+
+    Priority per role:
+    1. <ROLE>_LLM_MODEL environment variable
+    2. REMOTE_LLM_MODEL (shared env override for all roles)
+    3. remote_llm.<role>_model in config
+    4. remote_llm.model in config
+    5. existing language_models.<role>
+
+    Unknown model strings are preserved as-is and sent directly to the remote
+    chat-completions server.
+    """
+    if not isinstance(config, dict):
+        return config
+
+    language_models = config.setdefault("language_models", {})
+    remote_llm = config.get("remote_llm") or {}
+    shared_env_model = (os.environ.get("REMOTE_LLM_MODEL") or "").strip()
+    shared_cfg_model = str(remote_llm.get("model") or "").strip()
+
+    for role in _LLM_ROLES:
+        role_env_model = (os.environ.get(f"{role.upper()}_LLM_MODEL") or "").strip()
+        role_cfg_model = str(remote_llm.get(f"{role}_model") or "").strip()
+        override = role_env_model or shared_env_model or role_cfg_model or shared_cfg_model
+        if override:
+            language_models[role] = override
+
+    return config
+
 
 def find_next_available_scenario_id(output_dir: str) -> int:
     """
@@ -166,6 +198,7 @@ def main(config: dict) -> None:
     Main function to run the medical diagnosis simulation.
     """
     try:
+        config = apply_model_selection_overrides(config)
         # Extract API keys
         api_key = config["api_keys"].get("openai")
         replicate_api_key = config["api_keys"].get("replicate")
@@ -253,6 +286,7 @@ def main(config: dict) -> None:
     
 def prep(config, total_scenarios, total_correct, num_scenarios, scenario_id):
     try:
+        config = apply_model_selection_overrides(config)
         # Extract API keys
         api_key = config["api_keys"].get("openai")
         replicate_api_key = config["api_keys"].get("replicate")
@@ -917,6 +951,7 @@ if __name__ == "__main__":
 
     # Load configuration from file
     config = load_config(args.config)
+    config = apply_model_selection_overrides(config)
 
     # Override configurations with command-line arguments if provided
     if args.openai_api_key:

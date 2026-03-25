@@ -424,10 +424,19 @@ class BAgent:
                 # Return the generated response
                 return response_data["choices"][0]["message"]["content"].strip()
             except requests.exceptions.RequestException as e:
-                logger.warning(f"Server query attempt {attempt + 1} failed: {e}")
+                logger.warning(
+                    "Server query attempt %s failed for model=%r url=%s: %s",
+                    attempt + 1,
+                    self.model_name,
+                    self.server_url,
+                    e,
+                )
                 time.sleep(timeout)
 
-        logger.error("Max retries exceeded: Unable to fetch response from server.")
+        logger.error(
+            "Max retries exceeded: Unable to fetch response from server for model=%r.",
+            self.model_name,
+        )
         return "Error: Failed to fetch response from server."
 
     def _query_local(
@@ -502,6 +511,8 @@ class BAgent:
         }
 
         headers = {"Content-Type": "application/json"}
+        if self.server_token:
+            headers["Authorization"] = f"Bearer {self.server_token}"
 
         for attempt in range(tries):
             try:
@@ -517,10 +528,19 @@ class BAgent:
                 # Return the generated response
                 return response_data["choices"][0]["message"]["content"].strip()
             except requests.exceptions.RequestException as e:
-                logger.warning(f"Server query attempt {attempt + 1} failed: {e}")
+                logger.warning(
+                    "Server query attempt %s failed for model=%r url=%s: %s",
+                    attempt + 1,
+                    self.model_name,
+                    self.server_url,
+                    e,
+                )
                 time.sleep(timeout)
 
-        logger.error("Max retries exceeded: Unable to fetch response from server.")
+        logger.error(
+            "Max retries exceeded: Unable to fetch response from server for model=%r.",
+            self.model_name,
+        )
         return "Error: Failed to fetch response from server."
 
     def query_model_with_ensembling(
