@@ -73,10 +73,6 @@
   const DENTISTRY_DOC_SEAT = { x: 49, y: 25 };
   // Match backend: chair west of desk; walkable tile east of partition (white chair).
   const DENTISTRY_PAT_SEAT = { x: 55, y: 25 };
-  // Align movement targets with spawn (sprite body uses tile center X, feet offset Y).
-  function personaTargetPxFromTile(tx, ty, tw) {
-    return [tx * tw + tw / 2, ty * tw + tw];
-  }
 
 
 	// Phaser 3.0 global settings. 
@@ -489,9 +485,13 @@
 	                "environment": {}}
 	    for (let i=0; i<Object.keys(personas).length; i++) {
 	      let persona_name = Object.keys(personas)[i];
+        let tileX = Math.ceil((personas[persona_name].body.position.x) / tile_width);
+        let tileY = Math.ceil((personas[persona_name].body.position.y) / tile_width);
+        tileX = Math.max(0, Math.min(map.width - 1, tileX));
+        tileY = Math.max(0, Math.min(map.height - 1, tileY));
 	      data["environment"][persona_name] = {"maze": curr_maze,
-	                                           "x": Math.ceil((personas[persona_name].body.position.x) / tile_width),
-	                                           "y": Math.ceil((personas[persona_name].body.position.y) / tile_width)}
+	                                           "x": tileX,
+	                                           "y": tileY}
 	    }
 	    var json = JSON.stringify(data);
 	    // We then send this to the frontend server: 
@@ -573,7 +573,8 @@
 	        if (!personaMove) continue;
 	        let curr_x = personaMove["movement"][0];
 	        let curr_y = personaMove["movement"][1];
-	        movement_target[curr_persona_name] = personaTargetPxFromTile(curr_x, curr_y, tile_width);
+	        movement_target[curr_persona_name] = [curr_x * tile_width,
+	                                              curr_y * tile_width];
 	        let pronunciatio_content = personaMove["pronunciatio"] || "";
 	        // This is what gives the pronunciatio balloon the name initials. We 
 	        // use regex to extract the initials of the personas. 
@@ -662,10 +663,10 @@
               if (docMove && Array.isArray(docMove["chat"]) && docMove["chat"].length > 0) hasChat = true;
               if (patMove && Array.isArray(patMove["chat"]) && patMove["chat"].length > 0) hasChat = true;
 
-              let docSeatPxX = docSeatDyn.x * tile_width + tile_width / 2;
-              let docSeatPxY = docSeatDyn.y * tile_width + tile_width;
-              let patSeatPxX = patSeatDyn.x * tile_width + tile_width / 2;
-              let patSeatPxY = patSeatDyn.y * tile_width + tile_width;
+              let docSeatPxX = docSeatDyn.x * tile_width;
+              let docSeatPxY = docSeatDyn.y * tile_width;
+              let patSeatPxX = patSeatDyn.x * tile_width;
+              let patSeatPxY = patSeatDyn.y * tile_width;
               let near = tile_width;
               let docAtSeat = (Math.abs(docSprite.body.x - docSeatPxX) <= near
                             && Math.abs(docSprite.body.y - docSeatPxY) <= near);

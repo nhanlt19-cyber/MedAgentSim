@@ -85,24 +85,34 @@ def _seat_tile_for_consultation(persona, maze, personas, plan):
     me_arena = str(me_det.get("arena", "")).strip().lower()
     other_arena = str(other_det.get("arena", "")).strip().lower()
   except Exception:
-    return None
-
-  target_arena = "dentistry consultation room"
-  if target_arena not in me_arena and target_arena not in other_arena:
-    return None
+    me_arena = ""
+    other_arena = ""
 
   doc_name = "Maria Lopez"
   pat_name = "Klaus Mueller"
+  is_clinical_pair = {
+    persona.name.strip().lower(),
+    other_name.strip().lower(),
+  } == {doc_name.lower(), pat_name.lower()}
+  target_arena = "dentistry consultation room"
+  if not is_clinical_pair:
+    return None
+
   # Map: several identical bays: doctor chair (32247) at 49+9k, desk at 52+9k, patient
   # sit tile east of partition at 55+9k (y=25). Env vars are anchors for bay k=0 only.
   pitch, _desk_base_x = _dentistry_bay_pitch_and_desk_base()
   base_doc = _parse_tile_env("DENTISTRY_DOCTOR_SEAT_TILE", (49, 25))
   base_pat = _parse_tile_env("DENTISTRY_PATIENT_SEAT_TILE", (55, 25))
   try:
-    t_doc = list(personas[doc_name].scratch.curr_tile)
-    t_pat = list(personas[pat_name].scratch.curr_tile)
-    ref_x = (int(t_doc[0]) + int(t_pat[0])) // 2
-    k = _dentistry_bay_k_from_ref_x(ref_x)
+    # If at least one persona is already in Dentistry, snap to that bay.
+    # Otherwise, default to bay 0 so both agents head straight to the same room.
+    if target_arena in me_arena or target_arena in other_arena:
+      t_doc = list(personas[doc_name].scratch.curr_tile)
+      t_pat = list(personas[pat_name].scratch.curr_tile)
+      ref_x = (int(t_doc[0]) + int(t_pat[0])) // 2
+      k = _dentistry_bay_k_from_ref_x(ref_x)
+    else:
+      k = 0
   except Exception:
     k = 0
   doc_tile = [base_doc[0] + pitch * k, base_doc[1]]
@@ -112,6 +122,21 @@ def _seat_tile_for_consultation(persona, maze, personas, plan):
     return doc_tile
   if persona.name.strip().lower() == pat_name.lower():
     return pat_tile
+  return None
+
+def _direct_tile_for_dentistry_room(persona, plan):
+  """
+  For the clinical demo pair, entering Dentistry should go to fixed seats
+  instead of a random walkable tile inside the room.
+  """
+  if "dentistry consultation room" not in str(plan).strip().lower():
+    return None
+
+  name = persona.name.strip().lower()
+  if name == "maria lopez":
+    return _parse_tile_env("DENTISTRY_DOCTOR_SEAT_TILE", (49, 25))
+  if name == "klaus mueller":
+    return _parse_tile_env("DENTISTRY_PATIENT_SEAT_TILE", (55, 25))
   return None
 
 def execute(persona, maze, personas, plan): 
@@ -172,16 +197,25 @@ def execute(persona, maze, personas, plan):
           target_tile = [int(parts[1]), int(parts[2])]
       elif "<random>" in plan:
         base_plan = ":".join(plan.split(":")[:-1])
-        if base_plan in getattr(maze, "address_tiles", {}):
+        seat_tile = _direct_tile_for_dentistry_room(persona, base_plan)
+        if seat_tile is not None:
+          target_tile = seat_tile
+        elif base_plan in getattr(maze, "address_tiles", {}):
           target_tile = random.sample(list(maze.address_tiles[base_plan]), 1)[0]
       else:
         # Normal address jump: {world}:{sector}:{arena}:{game_objects}
-        if plan in getattr(maze, "address_tiles", {}):
+        seat_tile = _direct_tile_for_dentistry_room(persona, plan)
+        if seat_tile is not None:
+          target_tile = seat_tile
+        elif plan in getattr(maze, "address_tiles", {}):
           target_tile = random.sample(list(maze.address_tiles[plan]), 1)[0]
         else:
           # Sometimes plan can include a game object that isn't indexed; try stripping it.
           base_plan = ":".join(plan.split(":")[:-1])
-          if base_plan in getattr(maze, "address_tiles", {}):
+          seat_tile = _direct_tile_for_dentistry_room(persona, base_plan)
+          if seat_tile is not None:
+            target_tile = seat_tile
+          elif base_plan in getattr(maze, "address_tiles", {}):
             target_tile = random.sample(list(maze.address_tiles[base_plan]), 1)[0]
     except Exception:
       target_tile = None
@@ -244,8 +278,12 @@ def execute(persona, maze, personas, plan):
     elif "<random>" in plan: 
       # Executing a random location action.
       plan = ":".join(plan.split(":")[:-1])
-      target_tiles = maze.address_tiles[plan]
-      target_tiles = random.sample(list(target_tiles), 1)
+      seat_tile = _direct_tile_for_dentistry_room(persona, plan)
+      if seat_tile is not None:
+        target_tiles = [seat_tile]
+      else:
+        target_tiles = maze.address_tiles[plan]
+        target_tiles = random.sample(list(target_tiles), 1)
 
     else: 
       # This is our default execution. We simply take the persona to the
@@ -253,7 +291,10 @@ def execute(persona, maze, personas, plan):
       # Retrieve the target addresses. Again, plan is an action address in its
       # string form. <maze.address_tiles> takes this and returns candidate 
       # coordinates. 
-      if plan not in maze.address_tiles:
+      seat_tile = _direct_tile_for_dentistry_room(persona, plan)
+      if seat_tile is not None:
+        target_tiles = [seat_tile]
+      elif plan not in maze.address_tiles:
         # maze.address_tiles["Johnson Park:park:park garden"] #ERRORRRRRRR
         print("################ PLAN ################")
         print(plan)
