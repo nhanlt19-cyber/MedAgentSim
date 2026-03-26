@@ -253,8 +253,6 @@ def execute(persona, maze, personas, plan):
     # to execute the current action. The goal is to pick one of them.
     target_tiles = None
 
-    print (plan)
-
     if "<persona>" in plan: 
       # Executing persona-persona interaction.
       seat_tile = _seat_tile_for_consultation(persona, maze, personas, plan)

@@ -153,7 +153,6 @@ def generate_hourly_schedule(persona, wake_up_hour):
      ['eating breakfast', 60],..
   """
   if debug: print ("GNS FUNCTION: <generate_hourly_schedule>")
-  print(f"NAME : {persona.scratch.get_str_name()}")
   # hour_str = ["00:00 AM", "01:00 AM", "02:00 AM", "03:00 AM", "04:00 AM", 
   #             "05:00 AM", "06:00 AM", "07:00 AM", "08:00 AM", "09:00 AM", 
   #             "10:00 AM", "11:00 AM", "12:00 PM", "01:00 PM", "02:00 PM", 
@@ -442,6 +441,8 @@ def generate_convo_summary(persona, convo):
 
 
 def generate_decide_to_talk(init_persona, target_persona, retrieved): 
+  if _is_clinical_demo_persona(init_persona) and _is_clinical_demo_persona(target_persona):
+    return True
   x =run_gpt_prompt_decide_to_talk(init_persona, target_persona, retrieved)[0]
   if debug: print ("GNS FUNCTION: <generate_decide_to_talk>")
 
@@ -598,7 +599,6 @@ def revise_identity(persona):
 
   new_daily_req = ChatGPT_single_request(daily_req_prompt)
   new_daily_req = new_daily_req.replace('\n', ' ')
-  print ("WE ARE HERE!!!", new_daily_req)
   persona.scratch.daily_plan_req = new_daily_req
 
 
@@ -739,21 +739,12 @@ def _determine_action(persona, maze):
   # Generate an <Action> instance from the action description and duration. By
   # this point, we assume that all the relevant actions are decomposed and 
   # ready in f_daily_schedule. 
-  print ("DEBUG LJSDLFSKJF")
-  for i in persona.scratch.f_daily_schedule: print (i)
-  print (curr_index)
-  print (len(persona.scratch.f_daily_schedule))
-  print (persona.scratch.name)
-  print ("------")
-
   # 1440
   x_emergency = 0
   for i in persona.scratch.f_daily_schedule: 
     x_emergency += i[1]
   # print ("x_emergency", x_emergency)
 
-  if 1440 - x_emergency > 0: 
-    print ("x_emergency__AAA", x_emergency)
   persona.scratch.f_daily_schedule += [["sleeping", 1440 - x_emergency]]
   
 
@@ -901,6 +892,10 @@ def _should_react(persona, retrieved, personas):
       if not (_in_dentistry_consultation_room(init_persona)
               and _in_dentistry_consultation_room(target_persona)):
         return False
+      # Demo rule: once the doctor/patient pair is both in the consultation
+      # room, start the conversation immediately instead of waiting on another
+      # LLM classification step.
+      return True
 
     if generate_decide_to_talk(init_persona, target_persona, retrieved): 
 
