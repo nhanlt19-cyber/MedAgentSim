@@ -31,6 +31,23 @@ import json
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, default))
+    except Exception:
+        return default
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.environ.get(name, default))
+    except Exception:
+        return default
+
+def _apply_llm_query_overrides(tries, timeout):
+    env_tries = _env_int("LLM_QUERY_TRIES", tries)
+    env_timeout = _env_float("LLM_QUERY_TIMEOUT", timeout)
+    return max(1, env_tries), max(1.0, env_timeout)
+
 
 class BAgent:
     def __init__(
@@ -258,6 +275,7 @@ class BAgent:
         thread_id=1,
     ):
         """Queries available backend: vLLM server > Ollama > local model."""
+        tries, timeout = _apply_llm_query_overrides(tries, timeout)
         if self.use_server:
             return self._query_server(prompt, system_prompt, tries, timeout)
         elif self.use_ollama:
@@ -415,6 +433,8 @@ class BAgent:
         headers = {"Content-Type": "application/json"}
         if self.server_token:
             headers["Authorization"] = f"Bearer {self.server_token}"
+        post_success_sleep = _env_float("LLM_QUERY_SUCCESS_SLEEP", 2.0)
+        retry_sleep = _env_float("LLM_QUERY_RETRY_SLEEP", timeout)
 
         for attempt in range(tries):
             try:
@@ -425,7 +445,7 @@ class BAgent:
                 response_data = response.json()
 
                 # Introduce a short delay to avoid rate limits
-                time.sleep(2.0)
+                time.sleep(post_success_sleep)
 
                 # Return the generated response
                 return response_data["choices"][0]["message"]["content"].strip()
@@ -437,7 +457,7 @@ class BAgent:
                     self.server_url,
                     e,
                 )
-                time.sleep(timeout)
+                time.sleep(retry_sleep)
 
         logger.error(
             "Max retries exceeded: Unable to fetch response from server for model=%r.",
@@ -519,6 +539,9 @@ class BAgent:
         headers = {"Content-Type": "application/json"}
         if self.server_token:
             headers["Authorization"] = f"Bearer {self.server_token}"
+        tries, timeout = _apply_llm_query_overrides(tries, timeout)
+        post_success_sleep = _env_float("LLM_QUERY_SUCCESS_SLEEP", 2.0)
+        retry_sleep = _env_float("LLM_QUERY_RETRY_SLEEP", timeout)
 
         for attempt in range(tries):
             try:
@@ -529,7 +552,7 @@ class BAgent:
                 response_data = response.json()
 
                 # Introduce a short delay to avoid rate limits
-                time.sleep(2.0)
+                time.sleep(post_success_sleep)
 
                 # Return the generated response
                 return response_data["choices"][0]["message"]["content"].strip()
@@ -541,7 +564,7 @@ class BAgent:
                     self.server_url,
                     e,
                 )
-                time.sleep(timeout)
+                time.sleep(retry_sleep)
 
         logger.error(
             "Max retries exceeded: Unable to fetch response from server for model=%r.",

@@ -6,6 +6,7 @@ Description: This defines the "Plan" module for generative agents.
 """
 import datetime
 import math
+import os
 import random 
 import sys
 import time
@@ -19,6 +20,65 @@ from persona.cognitive_modules.converse import *
 ##############################################################################
 # CHAPTER 2: Generate
 ##############################################################################
+
+def _is_clinical_demo_persona(persona):
+  return persona.scratch.get_str_name().strip() in ("Maria Lopez", "Klaus Mueller")
+
+def _fast_demo_action_location(act_desp, persona):
+  act = (act_desp or "").strip().lower()
+  if not _is_clinical_demo_persona(persona):
+    return None, None
+  if ("patient" in act
+      or "hospital" in act
+      or "dr. maria lopez" in act
+      or "treated" in act
+      or "diagnosis" in act):
+    return "Hospital", "Dentistry Consultation Room"
+  return None, None
+
+def _fast_demo_pronunciatio(act_desp, persona):
+  act = (act_desp or "").strip().lower()
+  if not _is_clinical_demo_persona(persona):
+    return None
+  if "waiting for patients" in act:
+    return "💬"
+  if "hospital" in act or "finding dr. maria lopez" in act:
+    return "🚶"
+  if "treated" in act or "diagnosis" in act:
+    return "🩺"
+  if "sleep" in act:
+    return "💤"
+  return "🙂"
+
+def _fast_demo_event_triple(act_desp, persona):
+  name = persona.scratch.get_str_name().strip()
+  act = (act_desp or "").strip()
+  act_l = act.lower()
+  if not _is_clinical_demo_persona(persona):
+    return None
+  if "waiting for patients" in act_l:
+    return (name, "wait for", "patients")
+  if "going to the hospital" in act_l:
+    return (name, "go to", "hospital")
+  if "finding dr. maria lopez" in act_l:
+    return (name, "talk with", "Maria Lopez")
+  if "getting treated" in act_l:
+    return (name, "receive", "treatment")
+  if "receiving diagnosis update" in act_l:
+    return (name, "receive", "diagnosis")
+  if "monitoring recovery" in act_l:
+    return (name, "monitor", "recovery")
+  return (name, "do", act if act else "activity")
+
+def _fast_demo_object_desc(act_game_object, act_desp, persona):
+  if not _is_clinical_demo_persona(persona):
+    return None
+  return act_desp
+
+def _fast_demo_object_event(act_game_object, act_obj_desc, persona):
+  if not _is_clinical_demo_persona(persona):
+    return None
+  return (act_game_object, "used for", (act_obj_desc or "activity"))
 
 def generate_wake_up_hour(persona):
   """
@@ -35,6 +95,8 @@ def generate_wake_up_hour(persona):
     8
   """
   if debug: print ("GNS FUNCTION: <generate_wake_up_hour>")
+  if _is_clinical_demo_persona(persona):
+    return 8
   return int(run_gpt_prompt_wake_up_hour(persona)[0])
 
 
@@ -187,6 +249,8 @@ def generate_task_decomp(persona, task, duration):
 
   """
   if debug: print ("GNS FUNCTION: <generate_task_decomp>")
+  if _is_clinical_demo_persona(persona):
+    return [[task, duration]]
   return run_gpt_prompt_task_decomp(persona, task, duration)[0]
 
 
@@ -205,6 +269,9 @@ def generate_action_sector(act_desp, persona, maze):
     "bedroom 2"
   """
   if debug: print ("GNS FUNCTION: <generate_action_sector>")
+  fast_sector, _ = _fast_demo_action_location(act_desp, persona)
+  if fast_sector is not None:
+    return fast_sector
   return run_gpt_prompt_action_sector(act_desp, persona, maze)[0]
 
 
@@ -223,6 +290,9 @@ def generate_action_arena(act_desp, persona, maze, act_world, act_sector):
     "bedroom 2"
   """
   if debug: print ("GNS FUNCTION: <generate_action_arena>")
+  _, fast_arena = _fast_demo_action_location(act_desp, persona)
+  if fast_arena is not None:
+    return fast_arena
   return run_gpt_prompt_action_arena(act_desp, persona, maze, act_world, act_sector)[0]
 
 
@@ -265,6 +335,9 @@ def generate_action_pronunciatio(act_desp, persona):
     "🧈🍞"
   """
   if debug: print ("GNS FUNCTION: <generate_action_pronunciatio>")
+  fast_pron = _fast_demo_pronunciatio(act_desp, persona)
+  if fast_pron is not None:
+    return fast_pron
   try: 
     x = run_gpt_prompt_pronunciatio(act_desp, persona)[0]
   except: 
@@ -287,16 +360,25 @@ def generate_action_event_triple(act_desp, persona):
     "🧈🍞"
   """
   if debug: print ("GNS FUNCTION: <generate_action_event_triple>")
+  fast_event = _fast_demo_event_triple(act_desp, persona)
+  if fast_event is not None:
+    return fast_event
   return run_gpt_prompt_event_triple(act_desp, persona)[0]
 
 
 def generate_act_obj_desc(act_game_object, act_desp, persona): 
   if debug: print ("GNS FUNCTION: <generate_act_obj_desc>")
+  fast_desc = _fast_demo_object_desc(act_game_object, act_desp, persona)
+  if fast_desc is not None:
+    return fast_desc
   return run_gpt_prompt_act_obj_desc(act_game_object, act_desp, persona)[0]
 
 
 def generate_act_obj_event_triple(act_game_object, act_obj_desc, persona): 
   if debug: print ("GNS FUNCTION: <generate_act_obj_event_triple>")
+  fast_event = _fast_demo_object_event(act_game_object, act_obj_desc, persona)
+  if fast_event is not None:
+    return fast_event
   return run_gpt_prompt_act_obj_event_triple(act_game_object, act_obj_desc, persona)[0]
 
 
