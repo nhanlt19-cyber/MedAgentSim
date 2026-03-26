@@ -27,6 +27,7 @@ from persona.cognitive_modules.retrieve import *
 from persona.cognitive_modules.plan import *
 from persona.cognitive_modules.reflect import *
 from persona.cognitive_modules.execute import *
+from persona.cognitive_modules.execute import _seat_tile_for_consultation
 from persona.cognitive_modules.converse import *
 
 class Persona: 
