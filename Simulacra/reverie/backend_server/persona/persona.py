@@ -207,6 +207,11 @@ class Persona:
     # Updating persona's scratch memory with <curr_tile>. 
     self.scratch.curr_tile = curr_tile
 
+    strict_clinical_demo = (
+      os.environ.get("STRICT_CLINICAL_DEMO", "").strip().lower() in ("1", "true", "yes", "on")
+      and self.name.strip() in ("Maria Lopez", "Klaus Mueller")
+    )
+
     def _ready_to_stream_active_chat():
       if not getattr(self.scratch, "chat_full", None):
         return False
@@ -300,10 +305,15 @@ class Persona:
         return self.execute(maze, personas, self.scratch.act_address)
 
     # Main cognitive sequence begins here. 
-    perceived = self.perceive(maze)
-    retrieved = self.retrieve(perceived)
+    if strict_clinical_demo:
+      perceived = []
+      retrieved = {}
+    else:
+      perceived = self.perceive(maze)
+      retrieved = self.retrieve(perceived)
     plan = self.plan(maze, personas, new_day, retrieved)
-    self.reflect()
+    if not strict_clinical_demo:
+      self.reflect()
 
     # Nếu đang có hội thoại nhiều lượt, tiến dần theo từng bước simulation.
     if getattr(self.scratch, "chat_full", None):

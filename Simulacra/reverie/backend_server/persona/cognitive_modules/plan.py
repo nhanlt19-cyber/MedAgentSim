@@ -21,12 +21,20 @@ from persona.cognitive_modules.converse import *
 # CHAPTER 2: Generate
 ##############################################################################
 
+def _strict_clinical_demo_enabled(persona=None):
+  enabled = os.environ.get("STRICT_CLINICAL_DEMO", "").strip().lower() in ("1", "true", "yes", "on")
+  if not enabled:
+    return False
+  if persona is None:
+    return True
+  return _is_clinical_demo_persona(persona)
+
 def _is_clinical_demo_persona(persona):
   return persona.scratch.get_str_name().strip() in ("Maria Lopez", "Klaus Mueller")
 
 def _fast_demo_action_location(act_desp, persona):
   act = (act_desp or "").strip().lower()
-  if not _is_clinical_demo_persona(persona):
+  if not _strict_clinical_demo_enabled(persona):
     return None, None
   if ("patient" in act
       or "hospital" in act
@@ -38,7 +46,7 @@ def _fast_demo_action_location(act_desp, persona):
 
 def _fast_demo_pronunciatio(act_desp, persona):
   act = (act_desp or "").strip().lower()
-  if not _is_clinical_demo_persona(persona):
+  if not _strict_clinical_demo_enabled(persona):
     return None
   if "waiting for patients" in act:
     return "💬"
@@ -54,7 +62,7 @@ def _fast_demo_event_triple(act_desp, persona):
   name = persona.scratch.get_str_name().strip()
   act = (act_desp or "").strip()
   act_l = act.lower()
-  if not _is_clinical_demo_persona(persona):
+  if not _strict_clinical_demo_enabled(persona):
     return None
   if "waiting for patients" in act_l:
     return (name, "wait for", "patients")
@@ -71,14 +79,43 @@ def _fast_demo_event_triple(act_desp, persona):
   return (name, "do", act if act else "activity")
 
 def _fast_demo_object_desc(act_game_object, act_desp, persona):
-  if not _is_clinical_demo_persona(persona):
+  if not _strict_clinical_demo_enabled(persona):
     return None
   return act_desp
 
 def _fast_demo_object_event(act_game_object, act_obj_desc, persona):
-  if not _is_clinical_demo_persona(persona):
+  if not _strict_clinical_demo_enabled(persona):
     return None
   return (act_game_object, "used for", (act_obj_desc or "activity"))
+
+def _strict_demo_force_chat(maze, persona, personas):
+  if not _strict_clinical_demo_enabled(persona):
+    return None
+
+  other_name = "Klaus Mueller" if persona.name.strip() == "Maria Lopez" else "Maria Lopez"
+  other = personas.get(other_name)
+  if other is None or not _strict_clinical_demo_enabled(other):
+    return None
+
+  if getattr(persona.scratch, "chatting_with", None) or getattr(other.scratch, "chatting_with", None):
+    return None
+
+  try:
+    my_det = maze.access_tile(persona.scratch.curr_tile) or {}
+    other_det = maze.access_tile(other.scratch.curr_tile) or {}
+    my_arena = str(my_det.get("arena", "")).strip().lower()
+    other_arena = str(other_det.get("arena", "")).strip().lower()
+  except Exception:
+    return None
+
+  if "dentistry consultation room" not in my_arena or "dentistry consultation room" not in other_arena:
+    return None
+
+  if other_name in getattr(persona.scratch, "chatting_with_buffer", {}):
+    if persona.scratch.chatting_with_buffer[other_name] > 0:
+      return None
+
+  return f"chat with {other_name}"
 
 def generate_wake_up_hour(persona):
   """
@@ -95,7 +132,7 @@ def generate_wake_up_hour(persona):
     8
   """
   if debug: print ("GNS FUNCTION: <generate_wake_up_hour>")
-  if _is_clinical_demo_persona(persona):
+  if _strict_clinical_demo_enabled(persona):
     return 8
   return int(run_gpt_prompt_wake_up_hour(persona)[0])
 
@@ -248,7 +285,7 @@ def generate_task_decomp(persona, task, duration):
 
   """
   if debug: print ("GNS FUNCTION: <generate_task_decomp>")
-  if _is_clinical_demo_persona(persona):
+  if _strict_clinical_demo_enabled(persona):
     return [[task, duration]]
   return run_gpt_prompt_task_decomp(persona, task, duration)[0]
 
@@ -441,7 +478,7 @@ def generate_convo_summary(persona, convo):
 
 
 def generate_decide_to_talk(init_persona, target_persona, retrieved): 
-  if _is_clinical_demo_persona(init_persona) and _is_clinical_demo_persona(target_persona):
+  if _strict_clinical_demo_enabled(init_persona) and _strict_clinical_demo_enabled(target_persona):
     return True
   x =run_gpt_prompt_decide_to_talk(init_persona, target_persona, retrieved)[0]
   if debug: print ("GNS FUNCTION: <generate_decide_to_talk>")
@@ -888,7 +925,7 @@ def _should_react(persona, retrieved, personas):
     # Doctor/patient should only begin their dialogue after both have reached
     # the dentistry consultation room. This prevents "meeting in the hallway"
     # and lets the active chat action seat them inside the room first.
-    if _is_dentistry_clinical_pair(init_persona, target_persona):
+    if _strict_clinical_demo_enabled(init_persona) and _is_dentistry_clinical_pair(init_persona, target_persona):
       if not (_in_dentistry_consultation_room(init_persona)
               and _in_dentistry_consultation_room(target_persona)):
         return False
@@ -1179,6 +1216,11 @@ def plan(persona, maze, personas, new_day, retrieved):
 
   # PART 3: If you perceived an event that needs to be responded to (saw 
   # another persona), and retrieved relevant information. 
+  if _strict_clinical_demo_enabled(persona):
+    forced_mode = _strict_demo_force_chat(maze, persona, personas)
+    if forced_mode:
+      _chat_react(maze, persona, None, forced_mode, personas)
+
   # Step 1: Retrieved may have multiple events represented in it. The first 
   #         job here is to determine which of the events we want to focus 
   #         on for the persona. 
