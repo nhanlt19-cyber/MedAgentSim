@@ -170,25 +170,39 @@ def _outside_hospital_path_override(persona, target_tile, maze):
     curr_arena = str(curr_det.get("arena", "")).strip().lower()
   except Exception:
     curr_arena = ""
-  if "outside hospital" not in curr_arena:
+  # The sprite starts in the outside-hospital strip, but depending on the
+  # exact spawn tile metadata it may briefly report a nearby arena. Keep the
+  # override active as long as Klaus is still far to the left of Dentistry.
+  if "outside hospital" not in curr_arena and curr[0] > patient_seat[0] - 12:
     return None
 
-  # The default shortest path hugs the planter column near the hospital wall.
-  # Force a short sidestep to the right first so the sprite no longer overlaps
-  # the trees during the opening walk-in.
-  waypoint_candidates = []
-  for dx in (2, 3, 4, 5):
-    waypoint_candidates.append([curr[0] + dx, curr[1]])
-  for dx in (3, 4, 5):
-    waypoint_candidates.append([curr[0] + dx, curr[1] - 1])
-    waypoint_candidates.append([curr[0] + dx, curr[1] + 1])
+  # Force a visible sidestep to the right before shortest-path routing.
+  # This avoids the decorative tree column even when the tree tiles are not
+  # part of the collision maze.
+  lateral_shift = 6
+  forced_prefix = [tuple(curr)]
+  via_tile = [curr[0] + lateral_shift, curr[1]]
+  for step in range(1, lateral_shift + 1):
+    forced_prefix.append((curr[0] + step, curr[1]))
 
-  for via_tile in waypoint_candidates:
+  try:
+    path_b = _cached_path_finder(maze.collision_maze, via_tile, patient_seat, collision_block_id)
+    if path_b and len(path_b) > 1:
+      return forced_prefix + path_b[1:]
+  except Exception:
+    pass
+
+  # Fallback: try a slight diagonal sidestep if the straight one fails.
+  for dy in (-1, 1, -2, 2):
+    alt_via = [curr[0] + lateral_shift, curr[1] + dy]
+    alt_prefix = [tuple(curr)]
+    for step in range(1, lateral_shift + 1):
+      alt_prefix.append((curr[0] + step, curr[1]))
+    alt_prefix.append((alt_via[0], alt_via[1]))
     try:
-      path_a = _cached_path_finder(maze.collision_maze, curr, via_tile, collision_block_id)
-      path_b = _cached_path_finder(maze.collision_maze, via_tile, patient_seat, collision_block_id)
-      if path_a and path_b and len(path_a) > 1:
-        return path_a + path_b[1:]
+      path_b = _cached_path_finder(maze.collision_maze, alt_via, patient_seat, collision_block_id)
+      if path_b and len(path_b) > 1:
+        return alt_prefix + path_b[1:]
     except Exception:
       continue
   return None
