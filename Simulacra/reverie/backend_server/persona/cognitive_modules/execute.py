@@ -171,18 +171,20 @@ def _outside_hospital_path_override(persona, target_tile, maze):
     curr_arena = ""
   # Keep the override active for the opening walk-in, even if exact tile
   # metadata briefly flips while Klaus is still hugging the left planter line.
+  # Once he has moved to the safer corridor on the right, we stop overriding.
+  if curr[0] >= 46:
+    return None
   if "outside hospital" not in curr_arena and curr[0] > 40:
     return None
 
-  # Force a visible sidestep to the right before shortest-path routing.
-  # This avoids the decorative tree column even when the tree tiles are not
-  # part of the collision maze.
   target_tile = list(target_tile)
-  lateral_shift = 8
+  # Force Klaus into a fixed "safe" corridor to the right of the planter line.
+  # The previous relative sidestep was still visually too close to the trees.
+  safe_x = max(curr[0] + 1, 46)
   forced_prefix = [tuple(curr)]
-  via_tile = [curr[0] + lateral_shift, curr[1]]
-  for step in range(1, lateral_shift + 1):
-    forced_prefix.append((curr[0] + step, curr[1]))
+  for step_x in range(curr[0] + 1, safe_x + 1):
+    forced_prefix.append((step_x, curr[1]))
+  via_tile = [safe_x, curr[1]]
 
   try:
     path_b = _cached_path_finder(maze.collision_maze, via_tile, target_tile, collision_block_id)
@@ -193,10 +195,10 @@ def _outside_hospital_path_override(persona, target_tile, maze):
 
   # Fallback: try a slight diagonal sidestep if the straight one fails.
   for dy in (-1, 1, -2, 2):
-    alt_via = [curr[0] + lateral_shift, curr[1] + dy]
+    alt_via = [safe_x, curr[1] + dy]
     alt_prefix = [tuple(curr)]
-    for step in range(1, lateral_shift + 1):
-      alt_prefix.append((curr[0] + step, curr[1]))
+    for step_x in range(curr[0] + 1, safe_x + 1):
+      alt_prefix.append((step_x, curr[1]))
     alt_prefix.append((alt_via[0], alt_via[1]))
     try:
       path_b = _cached_path_finder(maze.collision_maze, alt_via, target_tile, collision_block_id)

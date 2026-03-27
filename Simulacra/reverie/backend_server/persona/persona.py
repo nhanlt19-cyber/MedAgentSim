@@ -227,10 +227,17 @@ class Persona:
       if other is None or getattr(other.scratch, "curr_tile", None) is None:
         return False
 
+      # Some older runs reached this branch with the helper missing from module
+      # globals; fall back to a local import so the consultation flow can keep
+      # seating the doctor/patient instead of crashing mid-scenario.
+      seat_resolver = globals().get("_seat_tile_for_consultation")
+      if seat_resolver is None:
+        from persona.cognitive_modules.execute import _seat_tile_for_consultation as seat_resolver
+
       my_plan = getattr(self.scratch, "act_address", "") or ""
       other_plan = getattr(other.scratch, "act_address", "") or f"<persona> {self.name}"
-      my_seat = _seat_tile_for_consultation(self, maze, personas, my_plan)
-      other_seat = _seat_tile_for_consultation(other, maze, personas, other_plan)
+      my_seat = seat_resolver(self, maze, personas, my_plan)
+      other_seat = seat_resolver(other, maze, personas, other_plan)
 
       # Non-dentistry chats can stream immediately as before.
       if my_seat is None or other_seat is None:
