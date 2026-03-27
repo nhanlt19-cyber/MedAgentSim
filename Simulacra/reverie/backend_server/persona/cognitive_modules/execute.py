@@ -143,13 +143,24 @@ def _consultation_path_override(persona, target_tile, maze):
   if curr == list(patient_seat):
     return [tuple(curr)]
 
-  # Approach from above, then step back down into the seat.
-  via_tile = [patient_seat[0], max(22, patient_seat[1] - 2)]
+  # Follow a stable corridor on the left side first, then cut across above the
+  # patient chair. This avoids the decorative tree line that visually overlaps
+  # with the default shortest path near x=48.
   try:
-    path_a = _cached_path_finder(maze.collision_maze, curr, via_tile, collision_block_id)
-    path_b = _cached_path_finder(maze.collision_maze, via_tile, patient_seat, collision_block_id)
-    if path_a and path_b:
-      return path_a + path_b[1:]
+    corridor_x = int(os.environ.get("DENTISTRY_PATIENT_CORRIDOR_X", "46") or "46")
+  except Exception:
+    corridor_x = 46
+  approach_y = max(22, patient_seat[1] - 2)
+  corridor_tile = [corridor_x, curr[1]]
+  turn_tile = [corridor_x, approach_y]
+  via_tile = [patient_seat[0], approach_y]
+  try:
+    path_a = _cached_path_finder(maze.collision_maze, curr, corridor_tile, collision_block_id)
+    path_b = _cached_path_finder(maze.collision_maze, corridor_tile, turn_tile, collision_block_id)
+    path_c = _cached_path_finder(maze.collision_maze, turn_tile, via_tile, collision_block_id)
+    path_d = _cached_path_finder(maze.collision_maze, via_tile, patient_seat, collision_block_id)
+    if path_a and path_b and path_c and path_d:
+      return path_a + path_b[1:] + path_c[1:] + path_d[1:]
   except Exception:
     return None
   return None
