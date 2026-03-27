@@ -323,8 +323,10 @@ class Persona:
     if not strict_clinical_demo:
       self.reflect()
 
-    # Nếu đang có hội thoại nhiều lượt, tiến dần theo từng bước simulation.
-    if getattr(self.scratch, "chat_full", None):
+    # If a new chat was just created this turn, only expose its first utterance
+    # once the stream is actually allowed to start. For the clinical demo pair
+    # this means both doctor and patient must already be seated.
+    if getattr(self.scratch, "chat_full", None) and _ready_to_stream_active_chat():
       self.scratch.advance_chat()
 
     # <execution> is a triple set that contains the following components: 
