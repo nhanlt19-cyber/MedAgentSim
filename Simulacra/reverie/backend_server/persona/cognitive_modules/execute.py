@@ -160,8 +160,7 @@ def _outside_hospital_path_override(persona, target_tile, maze):
   letting the normal shortest-path logic continue toward Dentistry.
   """
   name = persona.name.strip().lower()
-  patient_seat = _parse_tile_env("DENTISTRY_PATIENT_SEAT_TILE", (52, 25))
-  if name != "klaus mueller" or list(target_tile) != list(patient_seat):
+  if name != "klaus mueller" or not target_tile:
     return None
 
   curr = list(persona.scratch.curr_tile)
@@ -170,23 +169,23 @@ def _outside_hospital_path_override(persona, target_tile, maze):
     curr_arena = str(curr_det.get("arena", "")).strip().lower()
   except Exception:
     curr_arena = ""
-  # The sprite starts in the outside-hospital strip, but depending on the
-  # exact spawn tile metadata it may briefly report a nearby arena. Keep the
-  # override active as long as Klaus is still far to the left of Dentistry.
-  if "outside hospital" not in curr_arena and curr[0] > patient_seat[0] - 12:
+  # Keep the override active for the opening walk-in, even if exact tile
+  # metadata briefly flips while Klaus is still hugging the left planter line.
+  if "outside hospital" not in curr_arena and curr[0] > 40:
     return None
 
   # Force a visible sidestep to the right before shortest-path routing.
   # This avoids the decorative tree column even when the tree tiles are not
   # part of the collision maze.
-  lateral_shift = 6
+  target_tile = list(target_tile)
+  lateral_shift = 8
   forced_prefix = [tuple(curr)]
   via_tile = [curr[0] + lateral_shift, curr[1]]
   for step in range(1, lateral_shift + 1):
     forced_prefix.append((curr[0] + step, curr[1]))
 
   try:
-    path_b = _cached_path_finder(maze.collision_maze, via_tile, patient_seat, collision_block_id)
+    path_b = _cached_path_finder(maze.collision_maze, via_tile, target_tile, collision_block_id)
     if path_b and len(path_b) > 1:
       return forced_prefix + path_b[1:]
   except Exception:
@@ -200,7 +199,7 @@ def _outside_hospital_path_override(persona, target_tile, maze):
       alt_prefix.append((curr[0] + step, curr[1]))
     alt_prefix.append((alt_via[0], alt_via[1]))
     try:
-      path_b = _cached_path_finder(maze.collision_maze, alt_via, patient_seat, collision_block_id)
+      path_b = _cached_path_finder(maze.collision_maze, alt_via, target_tile, collision_block_id)
       if path_b and len(path_b) > 1:
         return alt_prefix + path_b[1:]
     except Exception:
@@ -425,6 +424,11 @@ def execute(persona, maze, personas, plan):
       elif len(curr_path) < len(path): 
         closest_target_tile = i
         path = curr_path
+
+    if path is not None and closest_target_tile is not None:
+      outside_override = _outside_hospital_path_override(persona, closest_target_tile, maze)
+      if outside_override:
+        path = outside_override
 
     # Actually setting the <planned_path> and <act_path_set>. We cut the 
     # first element in the planned_path because it includes the curr_tile. 
