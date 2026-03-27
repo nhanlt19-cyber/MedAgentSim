@@ -154,6 +154,45 @@ def _consultation_path_override(persona, target_tile, maze):
     return None
   return None
 
+def _outside_hospital_path_override(persona, target_tile, maze):
+  """
+  Nudge Klaus away from the decorative tree line outside the hospital before
+  letting the normal shortest-path logic continue toward Dentistry.
+  """
+  name = persona.name.strip().lower()
+  patient_seat = _parse_tile_env("DENTISTRY_PATIENT_SEAT_TILE", (52, 25))
+  if name != "klaus mueller" or list(target_tile) != list(patient_seat):
+    return None
+
+  curr = list(persona.scratch.curr_tile)
+  try:
+    curr_det = maze.access_tile(curr) or {}
+    curr_arena = str(curr_det.get("arena", "")).strip().lower()
+  except Exception:
+    curr_arena = ""
+  if "outside hospital" not in curr_arena:
+    return None
+
+  # The default shortest path hugs the planter column near the hospital wall.
+  # Force a short sidestep to the right first so the sprite no longer overlaps
+  # the trees during the opening walk-in.
+  waypoint_candidates = []
+  for dx in (2, 3, 4, 5):
+    waypoint_candidates.append([curr[0] + dx, curr[1]])
+  for dx in (3, 4, 5):
+    waypoint_candidates.append([curr[0] + dx, curr[1] - 1])
+    waypoint_candidates.append([curr[0] + dx, curr[1] + 1])
+
+  for via_tile in waypoint_candidates:
+    try:
+      path_a = _cached_path_finder(maze.collision_maze, curr, via_tile, collision_block_id)
+      path_b = _cached_path_finder(maze.collision_maze, via_tile, patient_seat, collision_block_id)
+      if path_a and path_b and len(path_a) > 1:
+        return path_a + path_b[1:]
+    except Exception:
+      continue
+  return None
+
 def execute(persona, maze, personas, plan): 
   """
   Given a plan (action's string address), we execute the plan (actually 
@@ -349,7 +388,9 @@ def execute(persona, maze, personas, plan):
     closest_target_tile = None
     path = None
     if len(target_tiles) == 1:
-      override_path = _consultation_path_override(persona, target_tiles[0], maze)
+      override_path = _outside_hospital_path_override(persona, target_tiles[0], maze)
+      if not override_path:
+        override_path = _consultation_path_override(persona, target_tiles[0], maze)
       if override_path:
         closest_target_tile = target_tiles[0]
         path = override_path
