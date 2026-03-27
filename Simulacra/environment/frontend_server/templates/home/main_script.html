@@ -160,6 +160,20 @@
 	let execute_count = execute_count_max;
 	let movement_target = {};
 
+	function tileToScreen(tileX, tileY) {
+	  return [
+	    tileX * tile_width + tile_width / 2,
+	    tileY * tile_width + tile_width
+	  ];
+	}
+
+	function screenToTile(screenX, screenY) {
+	  return {
+	    x: Math.round((screenX - tile_width / 2) / tile_width),
+	    y: Math.round((screenY - tile_width) / tile_width)
+	  };
+	}
+
 	// Stop frontend updates once diagnosis is ready.
 	let simulationStopped = false;
 	let diagnosisReadyFlag = false;
@@ -344,8 +358,8 @@
 	  // We start by creating the game sprite objects. 
 	  for (let i=0; i<Object.keys(spawn_tile_loc).length; i++) { 
 	    let persona_name = Object.keys(spawn_tile_loc)[i];
-	    let start_pos = [spawn_tile_loc[persona_name][0] * tile_width + tile_width / 2, 
-	                     spawn_tile_loc[persona_name][1] * tile_width + tile_width];
+	    let start_pos = tileToScreen(spawn_tile_loc[persona_name][0],
+	                                 spawn_tile_loc[persona_name][1]);
 	    let new_sprite = this.physics.add
 	                         .sprite(start_pos[0], start_pos[1], "atlas", "misa-front")
 	                         .setSize(30, 40)
@@ -491,8 +505,9 @@
 	                "environment": {}}
 	    for (let i=0; i<Object.keys(personas).length; i++) {
 	      let persona_name = Object.keys(personas)[i];
-        let tileX = Math.ceil((personas[persona_name].body.position.x) / tile_width);
-        let tileY = Math.ceil((personas[persona_name].body.position.y) / tile_width);
+        let currTile = screenToTile(personas[persona_name].x, personas[persona_name].y);
+        let tileX = currTile.x;
+        let tileY = currTile.y;
         tileX = Math.max(0, Math.min(map.width - 1, tileX));
         tileY = Math.max(0, Math.min(map.height - 1, tileY));
 	      data["environment"][persona_name] = {"maze": curr_maze,
@@ -569,8 +584,7 @@
 	        if (!personaMove) continue;
 	        let curr_x = personaMove["movement"][0];
 	        let curr_y = personaMove["movement"][1];
-	        movement_target[curr_persona_name] = [curr_x * tile_width,
-	                                              curr_y * tile_width];
+	        movement_target[curr_persona_name] = tileToScreen(curr_x, curr_y);
 	        let pronunciatio_content = personaMove["pronunciatio"] || "";
 	        // This is what gives the pronunciatio balloon the name initials. We 
 	        // use regex to extract the initials of the personas. 
@@ -600,23 +614,23 @@
 
 	      console.log(curr_persona_name);
 	      if (execute_count > 0) {
-	        if (curr_persona.body.x < movement_target[curr_persona_name][0]) {
-	          curr_persona.body.x += movement_speed; 
+	        if (curr_persona.x < movement_target[curr_persona_name][0]) {
+	          curr_persona.x += movement_speed; 
 	          anims_direction = "r";
 	          pre_anims_direction = "r"
 	          pre_anims_direction_dict[curr_persona_name] = "r"
-	        } else if (curr_persona.body.x > movement_target[curr_persona_name][0]) {
-	          curr_persona.body.x -= movement_speed; 
+	        } else if (curr_persona.x > movement_target[curr_persona_name][0]) {
+	          curr_persona.x -= movement_speed; 
 	          anims_direction = "l";
 	          pre_anims_direction = "l"
 	          pre_anims_direction_dict[curr_persona_name] = "l"
-	        } else if (curr_persona.body.y < movement_target[curr_persona_name][1]) {
-	          curr_persona.body.y += movement_speed;
+	        } else if (curr_persona.y < movement_target[curr_persona_name][1]) {
+	          curr_persona.y += movement_speed;
 	          anims_direction = "d";
 	          pre_anims_direction = "d"
 	          pre_anims_direction_dict[curr_persona_name] = "d"
-	        } else if (curr_persona.body.y > movement_target[curr_persona_name][1]) {
-	          curr_persona.body.y -= movement_speed;
+	        } else if (curr_persona.y > movement_target[curr_persona_name][1]) {
+	          curr_persona.y -= movement_speed;
 	          anims_direction = "u";
 	          pre_anims_direction = "u"
 	          pre_anims_direction_dict[curr_persona_name] = "u"
@@ -661,21 +675,19 @@
               if (docMove && Array.isArray(docMove["chat"]) && docMove["chat"].length > 0) hasChat = true;
               if (patMove && Array.isArray(patMove["chat"]) && patMove["chat"].length > 0) hasChat = true;
 
-              let docSeatPxX = docSeatDyn.x * tile_width;
-              let docSeatPxY = docSeatDyn.y * tile_width;
-              let patSeatPxX = patSeatDyn.x * tile_width;
-              let patSeatPxY = patSeatDyn.y * tile_width;
+              let [docSeatPxX, docSeatPxY] = tileToScreen(docSeatDyn.x, docSeatDyn.y);
+              let [patSeatPxX, patSeatPxY] = tileToScreen(patSeatDyn.x, patSeatDyn.y);
               let near = tile_width;
-              let docAtSeat = (Math.abs(docSprite.body.x - docSeatPxX) <= near
-                            && Math.abs(docSprite.body.y - docSeatPxY) <= near);
-              let patAtSeat = (Math.abs(patSprite.body.x - patSeatPxX) <= near
-                            && Math.abs(patSprite.body.y - patSeatPxY) <= near);
+              let docAtSeat = (Math.abs(docSprite.x - docSeatPxX) <= near
+                            && Math.abs(docSprite.y - docSeatPxY) <= near);
+              let patAtSeat = (Math.abs(patSprite.x - patSeatPxX) <= near
+                            && Math.abs(patSprite.y - patSeatPxY) <= near);
 
               // Once the clinical pair is seated in Dentistry, keep them facing
               // one another. Active chat is sufficient but no longer required.
               if (docAtSeat && patAtSeat) {
                 seatedClinicalPair = true;
-                let dxDocToPat = patSprite.body.x - docSprite.body.x;
+                let dxDocToPat = patSprite.x - docSprite.x;
                 if (isDoctor) {
                   curr_persona.setTexture("atlas", dxDocToPat >= 0 ? "misa-right" : "misa-left");
                   facingApplied = true;
@@ -707,8 +719,8 @@
 	        for (let i=0; i<Object.keys(personas).length; i++) {
 	          let curr_persona_name = Object.keys(personas)[i]
 	          let curr_persona = personas[curr_persona_name];
-	          curr_persona.body.x = movement_target[curr_persona_name][0];
-	          curr_persona.body.y = movement_target[curr_persona_name][1];
+	          curr_persona.x = movement_target[curr_persona_name][0];
+	          curr_persona.y = movement_target[curr_persona_name][1];
 	        }
 	        phase = "process";
 	        execute_count = execute_count_max + 1;

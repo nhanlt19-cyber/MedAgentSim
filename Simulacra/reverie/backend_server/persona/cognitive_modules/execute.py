@@ -171,8 +171,14 @@ def _outside_hospital_path_override(persona, target_tile, maze):
     curr_arena = ""
   # Keep the override active for the opening walk-in, even if exact tile
   # metadata briefly flips while Klaus is still hugging the left planter line.
-  # Once he has moved to the safer corridor on the right, we stop overriding.
-  if curr[0] >= 46:
+  # Once he has moved to a safer corridor farther to the right, we stop
+  # overriding. The decorative planters are not collision tiles, so the safe
+  # corridor has to be visually wider than the bare collision gap.
+  try:
+    safe_x_floor = int(os.environ.get("OUTSIDE_HOSPITAL_SAFE_X", "52") or "52")
+  except Exception:
+    safe_x_floor = 52
+  if curr[0] >= safe_x_floor:
     return None
   if "outside hospital" not in curr_arena and curr[0] > 40:
     return None
@@ -180,7 +186,7 @@ def _outside_hospital_path_override(persona, target_tile, maze):
   target_tile = list(target_tile)
   # Force Klaus into a fixed "safe" corridor to the right of the planter line.
   # The previous relative sidestep was still visually too close to the trees.
-  safe_x = max(curr[0] + 1, 46)
+  safe_x = max(curr[0] + 1, safe_x_floor)
   forced_prefix = [tuple(curr)]
   for step_x in range(curr[0] + 1, safe_x + 1):
     forced_prefix.append((step_x, curr[1]))
