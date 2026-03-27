@@ -92,6 +92,25 @@ def _strict_demo_force_chat(maze, persona, personas):
   if not _strict_clinical_demo_enabled(persona):
     return None
 
+  def _parse_tile_env(key, default_xy):
+    try:
+      raw = os.environ.get(key, "")
+      if raw:
+        parts = [int(i.strip()) for i in raw.split(",")]
+        if len(parts) == 2:
+          return parts[0], parts[1]
+    except Exception:
+      pass
+    return tuple(default_xy)
+
+  def _seat_for_name(name):
+    lowered = (name or "").strip().lower()
+    if lowered == "maria lopez":
+      return _parse_tile_env("DENTISTRY_DOCTOR_SEAT_TILE", (49, 25))
+    if lowered == "klaus mueller":
+      return _parse_tile_env("DENTISTRY_PATIENT_SEAT_TILE", (52, 25))
+    return None
+
   other_name = "Klaus Mueller" if persona.name.strip() == "Maria Lopez" else "Maria Lopez"
   other = personas.get(other_name)
   if other is None or not _strict_clinical_demo_enabled(other):
@@ -109,6 +128,15 @@ def _strict_demo_force_chat(maze, persona, personas):
     return None
 
   if "dentistry consultation room" not in my_arena or "dentistry consultation room" not in other_arena:
+    return None
+
+  my_seat = _seat_for_name(persona.name)
+  other_seat = _seat_for_name(other_name)
+  if my_seat is None or other_seat is None:
+    return None
+  if tuple(persona.scratch.curr_tile) != tuple(my_seat):
+    return None
+  if tuple(other.scratch.curr_tile) != tuple(other_seat):
     return None
 
   if other_name in getattr(persona.scratch, "chatting_with_buffer", {}):
