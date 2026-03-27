@@ -889,11 +889,39 @@ def _should_react(persona, retrieved, personas):
       names = {p1.name.strip().lower(), p2.name.strip().lower()}
       return names == {"maria lopez", "klaus mueller"}
 
+    def _parse_tile_env(key, default_xy):
+      try:
+        raw = os.environ.get(key, "")
+        if raw:
+          parts = [int(i.strip()) for i in raw.split(",")]
+          if len(parts) == 2:
+            return parts[0], parts[1]
+      except Exception:
+        pass
+      return tuple(default_xy)
+
     def _in_dentistry_consultation_room(p):
       try:
         det = maze.access_tile(p.scratch.curr_tile) or {}
         arena = str(det.get("arena", "")).strip().lower()
         return "dentistry consultation room" in arena
+      except Exception:
+        return False
+
+    def _expected_consultation_seat(p):
+      name = p.name.strip().lower()
+      if name == "maria lopez":
+        return _parse_tile_env("DENTISTRY_DOCTOR_SEAT_TILE", (49, 25))
+      if name == "klaus mueller":
+        return _parse_tile_env("DENTISTRY_PATIENT_SEAT_TILE", (52, 25))
+      return None
+
+    def _is_at_expected_consultation_seat(p):
+      seat = _expected_consultation_seat(p)
+      if seat is None:
+        return False
+      try:
+        return tuple(p.scratch.curr_tile) == tuple(seat)
       except Exception:
         return False
 
@@ -923,11 +951,15 @@ def _should_react(persona, retrieved, personas):
 
     # Clinical demo rule:
     # Doctor/patient should only begin their dialogue after both have reached
-    # the dentistry consultation room. This prevents "meeting in the hallway"
-    # and lets the active chat action seat them inside the room first.
+    # the dentistry consultation room and sat in their assigned consultation
+    # seats. This prevents "meeting in the hallway" and early dialogue while
+    # Klaus is still walking down the corridor.
     if _strict_clinical_demo_enabled(init_persona) and _is_dentistry_clinical_pair(init_persona, target_persona):
       if not (_in_dentistry_consultation_room(init_persona)
               and _in_dentistry_consultation_room(target_persona)):
+        return False
+      if not (_is_at_expected_consultation_seat(init_persona)
+              and _is_at_expected_consultation_seat(target_persona)):
         return False
       # Demo rule: once the doctor/patient pair is both in the consultation
       # room, start the conversation immediately instead of waiting on another
