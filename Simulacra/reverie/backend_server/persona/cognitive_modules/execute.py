@@ -147,16 +147,31 @@ def _consultation_path_override(persona, target_tile, maze):
     return [tuple(curr)]
 
   # Desired route shape for the demo:
-  # 1. Follow the natural corridor until Klaus is clear of the exterior
-  #    planter row; do not add an extra right-then-left dogleg.
-  # 2. Keep going straight into the room corridor.
-  # 3. Turn right near the chair row, then move down into the patient seat.
+  # 1. Stay on the current vertical corridor a bit longer so Klaus does not
+  #    make the early left turn into the wall-side lane.
+  # 2. After reaching the lower hallway, turn left across the room entrance.
+  # 3. In the consultation room, keep going straight, then turn right toward
+  #    the patient chair row, and finally move down into the seat.
+  straight_corridor_tile = [65, 55]
+  lower_hallway_tile = [48, 55]
   room_corridor_tile = [48, 23]
   top_entry_tile = [patient_seat[0], 23]
   try:
-    path_to_room_corridor = _cached_path_finder(
+    path_to_straight_corridor = _cached_path_finder(
       maze.collision_maze,
       curr,
+      straight_corridor_tile,
+      collision_block_id,
+    )
+    path_to_lower_hallway = _cached_path_finder(
+      maze.collision_maze,
+      straight_corridor_tile,
+      lower_hallway_tile,
+      collision_block_id,
+    )
+    path_to_room_corridor = _cached_path_finder(
+      maze.collision_maze,
+      lower_hallway_tile,
       room_corridor_tile,
       collision_block_id,
     )
@@ -172,8 +187,14 @@ def _consultation_path_override(persona, target_tile, maze):
       patient_seat,
       collision_block_id,
     )
-    if path_to_room_corridor and path_to_top_entry and path_down_to_seat:
-      return path_to_room_corridor + path_to_top_entry[1:] + path_down_to_seat[1:]
+    if path_to_straight_corridor and path_to_lower_hallway and path_to_room_corridor and path_to_top_entry and path_down_to_seat:
+      return (
+        path_to_straight_corridor
+        + path_to_lower_hallway[1:]
+        + path_to_room_corridor[1:]
+        + path_to_top_entry[1:]
+        + path_down_to_seat[1:]
+      )
   except Exception:
     pass
 
