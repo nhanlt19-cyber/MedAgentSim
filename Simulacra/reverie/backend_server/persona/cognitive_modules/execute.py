@@ -131,8 +131,13 @@ def _direct_tile_for_dentistry_room(persona, plan):
 
 def _consultation_path_override(persona, target_tile, maze):
   """
-  Guide the patient around the top side of the desk before settling into the
-  white chair, instead of cutting through the doctor / desk line visually.
+  Keep Klaus on the map's natural shortest route into Dentistry.
+
+  The earlier forced left-corridor detour (`x=46`) did avoid one decorative
+  overlap in some runs, but in current simulations it creates a visibly longer
+  dogleg and still leaves Klaus hugging the planter column near the room.
+  Prefer the map's own shortest path first, then only fall back to a tiny
+  "approach from above" correction if the direct path cannot be found.
   """
   name = persona.name.strip().lower()
   patient_seat = _parse_tile_env("DENTISTRY_PATIENT_SEAT_TILE", (52, 25))
@@ -143,26 +148,40 @@ def _consultation_path_override(persona, target_tile, maze):
   if curr == list(patient_seat):
     return [tuple(curr)]
 
-  # Follow a stable corridor on the left side first, then cut across above the
-  # patient chair. This avoids the decorative tree line that visually overlaps
-  # with the default shortest path near x=48.
   try:
-    corridor_x = int(os.environ.get("DENTISTRY_PATIENT_CORRIDOR_X", "46") or "46")
+    direct_path = _cached_path_finder(
+      maze.collision_maze,
+      curr,
+      patient_seat,
+      collision_block_id,
+    )
+    if direct_path and len(direct_path) > 1:
+      return direct_path
   except Exception:
-    corridor_x = 46
-  approach_y = max(22, patient_seat[1] - 2)
-  corridor_tile = [corridor_x, curr[1]]
-  turn_tile = [corridor_x, approach_y]
-  via_tile = [patient_seat[0], approach_y]
+    pass
+
+  # Fallback: if the direct seat path cannot be resolved, bias the last few
+  # tiles so Klaus still approaches the chair from above rather than from the
+  # doctor's side.
+  approach_y = max(28, patient_seat[1] + 3)
+  approach_tile = [patient_seat[0], approach_y]
   try:
-    path_a = _cached_path_finder(maze.collision_maze, curr, corridor_tile, collision_block_id)
-    path_b = _cached_path_finder(maze.collision_maze, corridor_tile, turn_tile, collision_block_id)
-    path_c = _cached_path_finder(maze.collision_maze, turn_tile, via_tile, collision_block_id)
-    path_d = _cached_path_finder(maze.collision_maze, via_tile, patient_seat, collision_block_id)
-    if path_a and path_b and path_c and path_d:
-      return path_a + path_b[1:] + path_c[1:] + path_d[1:]
+    path_a = _cached_path_finder(
+      maze.collision_maze,
+      curr,
+      approach_tile,
+      collision_block_id,
+    )
+    path_b = _cached_path_finder(
+      maze.collision_maze,
+      approach_tile,
+      patient_seat,
+      collision_block_id,
+    )
+    if path_a and path_b:
+      return path_a + path_b[1:]
   except Exception:
-    return None
+    pass
   return None
 
 def _outside_hospital_path_override(persona, target_tile, maze):
