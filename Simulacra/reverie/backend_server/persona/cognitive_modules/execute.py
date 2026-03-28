@@ -146,9 +146,14 @@ def _consultation_path_override(persona, target_tile, maze):
   if curr == list(patient_seat):
     return [tuple(curr)]
 
-  approach_y = max(28, patient_seat[1] + 3)
-  approach_tile = [patient_seat[0], approach_y]
-  right_safe_tile = [66, 65]
+  # Desired route shape for the demo:
+  # 1. Move farther right and continue straight down long enough to clear the
+  #    exterior planter row.
+  # 2. Rejoin the old corridor on the left side.
+  # 3. Enter the patient chair from above, not from below.
+  right_safe_tile = [68, 55]
+  left_corridor_tile = [46, 23]
+  top_entry_tile = [patient_seat[0], 23]
   try:
     path_segments = []
     if curr[1] >= right_safe_tile[1] and curr[0] < right_safe_tile[0]:
@@ -162,25 +167,31 @@ def _consultation_path_override(persona, target_tile, maze):
         path_segments.append(path_to_safe)
         curr = list(right_safe_tile)
 
-    path_to_approach = _cached_path_finder(
+    path_to_left_corridor = _cached_path_finder(
       maze.collision_maze,
       curr,
-      approach_tile,
+      left_corridor_tile,
       collision_block_id,
     )
-    path_down = _cached_path_finder(
+    path_to_top_entry = _cached_path_finder(
       maze.collision_maze,
-      approach_tile,
+      left_corridor_tile,
+      top_entry_tile,
+      collision_block_id,
+    )
+    path_down_to_seat = _cached_path_finder(
+      maze.collision_maze,
+      top_entry_tile,
       patient_seat,
       collision_block_id,
     )
-    if path_to_approach and path_down:
+    if path_to_left_corridor and path_to_top_entry and path_down_to_seat:
       if path_segments:
         merged_path = path_segments[0]
-        for extra_path in (path_to_approach, path_down):
+        for extra_path in (path_to_left_corridor, path_to_top_entry, path_down_to_seat):
           merged_path += extra_path[1:]
         return merged_path
-      return path_to_approach + path_down[1:]
+      return path_to_left_corridor + path_to_top_entry[1:] + path_down_to_seat[1:]
   except Exception:
     pass
 
@@ -204,6 +215,10 @@ def _outside_hospital_path_override(persona, target_tile, maze):
   """
   name = persona.name.strip().lower()
   if name != "klaus mueller" or not target_tile:
+    return None
+
+  patient_seat = _parse_tile_env("DENTISTRY_PATIENT_SEAT_TILE", (52, 25))
+  if list(target_tile) == list(patient_seat):
     return None
 
   curr = list(persona.scratch.curr_tile)
