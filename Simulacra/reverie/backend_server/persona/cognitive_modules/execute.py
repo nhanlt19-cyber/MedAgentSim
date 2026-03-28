@@ -131,14 +131,11 @@ def _direct_tile_for_dentistry_room(persona, plan):
 
 def _consultation_path_override(persona, target_tile, maze):
   """
-  Keep Klaus on the natural right-side approach into Dentistry.
-
-  The earlier custom detour pushed him too far left from the mid-route
-  onwards, which is the segment the user called out around movement 20+.
-  Prefer the map's direct path to the patient seat so he keeps moving straight
-  through the right corridor instead of taking an early left turn toward the
-  wall. If the direct seat path fails, fall back to a short "approach from
-  above" path for the final few tiles.
+  Keep Klaus on a stable Dentistry route:
+  - nudge the early approach one tile farther right to avoid the decorative
+    tree line in the first few movement frames, then
+  - enter the patient chair from above so he does not cut through the doctor
+    or the desk on the final approach.
   """
   name = persona.name.strip().lower()
   patient_seat = _parse_tile_env("DENTISTRY_PATIENT_SEAT_TILE", (52, 25))
@@ -149,6 +146,44 @@ def _consultation_path_override(persona, target_tile, maze):
   if curr == list(patient_seat):
     return [tuple(curr)]
 
+  approach_y = max(28, patient_seat[1] + 3)
+  approach_tile = [patient_seat[0], approach_y]
+  right_safe_tile = [66, 65]
+  try:
+    path_segments = []
+    if curr[1] >= right_safe_tile[1] and curr[0] < right_safe_tile[0]:
+      path_to_safe = _cached_path_finder(
+        maze.collision_maze,
+        curr,
+        right_safe_tile,
+        collision_block_id,
+      )
+      if path_to_safe and len(path_to_safe) > 1:
+        path_segments.append(path_to_safe)
+        curr = list(right_safe_tile)
+
+    path_to_approach = _cached_path_finder(
+      maze.collision_maze,
+      curr,
+      approach_tile,
+      collision_block_id,
+    )
+    path_down = _cached_path_finder(
+      maze.collision_maze,
+      approach_tile,
+      patient_seat,
+      collision_block_id,
+    )
+    if path_to_approach and path_down:
+      if path_segments:
+        merged_path = path_segments[0]
+        for extra_path in (path_to_approach, path_down):
+          merged_path += extra_path[1:]
+        return merged_path
+      return path_to_approach + path_down[1:]
+  except Exception:
+    pass
+
   try:
     direct_path = _cached_path_finder(
       maze.collision_maze,
@@ -158,26 +193,6 @@ def _consultation_path_override(persona, target_tile, maze):
     )
     if direct_path and len(direct_path) > 1:
       return direct_path
-  except Exception:
-    pass
-
-  approach_y = max(28, patient_seat[1] + 3)
-  approach_tile = [patient_seat[0], approach_y]
-  try:
-    path_a = _cached_path_finder(
-      maze.collision_maze,
-      curr,
-      approach_tile,
-      collision_block_id,
-    )
-    path_b = _cached_path_finder(
-      maze.collision_maze,
-      approach_tile,
-      patient_seat,
-      collision_block_id,
-    )
-    if path_a and path_b:
-      return path_a + path_b[1:]
   except Exception:
     pass
   return None
@@ -197,20 +212,24 @@ def _outside_hospital_path_override(persona, target_tile, maze):
     curr_arena = str(curr_det.get("arena", "")).strip().lower()
   except Exception:
     curr_arena = ""
-  # Keep the override active for the opening walk-in, even if exact tile
-  # metadata briefly flips while Klaus is still hugging the left planter line.
-  # Once he has moved to a safer corridor farther to the right, we stop
-  # overriding. The decorative planters are not collision tiles, so the safe
-  # corridor has to be visually wider than the bare collision gap.
+  # Only handle the very first outdoor approach. Once Klaus is below this
+  # early corridor, let the Dentistry-specific override take over.
   try:
-    safe_x_floor = int(os.environ.get("OUTSIDE_HOSPITAL_SAFE_X", "52") or "52")
+    early_y_floor = int(os.environ.get("OUTSIDE_HOSPITAL_EARLY_Y_FLOOR", "68") or "68")
   except Exception:
-    safe_x_floor = 52
-  if curr[0] >= safe_x_floor:
-    return None
-  if "outside hospital" not in curr_arena and curr[0] > 40:
+    early_y_floor = 68
+  if curr[1] < early_y_floor:
     return None
 
+  # Keep the override active for the opening walk-in, even if exact tile
+  # metadata briefly flips while Klaus is still hugging the decorative tree
+  # line. Shift him a bit farther right than the default route.
+  try:
+    safe_x_floor = int(os.environ.get("OUTSIDE_HOSPITAL_SAFE_X", "66") or "66")
+  except Exception:
+    safe_x_floor = 66
+  if curr[0] >= safe_x_floor:
+    return None
   target_tile = list(target_tile)
   # Force Klaus into a fixed "safe" corridor to the right of the planter line.
   # The previous relative sidestep was still visually too close to the trees.
