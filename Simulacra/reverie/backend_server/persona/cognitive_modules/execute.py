@@ -147,35 +147,22 @@ def _consultation_path_override(persona, target_tile, maze):
     return [tuple(curr)]
 
   # Desired route shape for the demo:
-  # 1. Move farther right and continue straight down long enough to clear the
-  #    exterior planter row.
-  # 2. Rejoin the old corridor on the left side.
-  # 3. Enter the patient chair from above, not from below.
-  right_safe_tile = [68, 55]
-  left_corridor_tile = [46, 23]
+  # 1. Follow the natural corridor until Klaus is clear of the exterior
+  #    planter row; do not add an extra right-then-left dogleg.
+  # 2. Keep going straight into the room corridor.
+  # 3. Turn right near the chair row, then move down into the patient seat.
+  room_corridor_tile = [48, 23]
   top_entry_tile = [patient_seat[0], 23]
   try:
-    path_segments = []
-    if curr[1] >= right_safe_tile[1] and curr[0] < right_safe_tile[0]:
-      path_to_safe = _cached_path_finder(
-        maze.collision_maze,
-        curr,
-        right_safe_tile,
-        collision_block_id,
-      )
-      if path_to_safe and len(path_to_safe) > 1:
-        path_segments.append(path_to_safe)
-        curr = list(right_safe_tile)
-
-    path_to_left_corridor = _cached_path_finder(
+    path_to_room_corridor = _cached_path_finder(
       maze.collision_maze,
       curr,
-      left_corridor_tile,
+      room_corridor_tile,
       collision_block_id,
     )
     path_to_top_entry = _cached_path_finder(
       maze.collision_maze,
-      left_corridor_tile,
+      room_corridor_tile,
       top_entry_tile,
       collision_block_id,
     )
@@ -185,13 +172,8 @@ def _consultation_path_override(persona, target_tile, maze):
       patient_seat,
       collision_block_id,
     )
-    if path_to_left_corridor and path_to_top_entry and path_down_to_seat:
-      if path_segments:
-        merged_path = path_segments[0]
-        for extra_path in (path_to_left_corridor, path_to_top_entry, path_down_to_seat):
-          merged_path += extra_path[1:]
-        return merged_path
-      return path_to_left_corridor + path_to_top_entry[1:] + path_down_to_seat[1:]
+    if path_to_room_corridor and path_to_top_entry and path_down_to_seat:
+      return path_to_room_corridor + path_to_top_entry[1:] + path_down_to_seat[1:]
   except Exception:
     pass
 
