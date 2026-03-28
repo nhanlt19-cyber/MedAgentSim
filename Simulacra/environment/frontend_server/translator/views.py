@@ -20,12 +20,7 @@ from .models import *
 fs_temp_storage = "temp_storage"
 
 
-def simulation_status(request):
-  """
-  Lightweight status endpoint so the frontend can stop polling/rendering once
-  a diagnosis is produced (diagnosis_ready=true).
-  """
-  # Backend controller lives in Simulacra/reverie/backend_server/simulation_controller.json
+def _read_simulation_controller():
   base_dir = os.path.dirname(os.path.abspath(__file__))
   ctrl_path = os.path.normpath(
     os.path.join(base_dir, "..", "..", "reverie", "backend_server", "simulation_controller.json")
@@ -36,7 +31,6 @@ def simulation_status(request):
     "simulation_index": None,
     "stop_at_step": None,
   }
-
   try:
     if os.path.exists(ctrl_path):
       with open(ctrl_path, "r") as f:
@@ -49,8 +43,15 @@ def simulation_status(request):
       data["error"] = "controller_not_found"
   except Exception as e:
     data["error"] = str(e)
+  return data
 
-  return JsonResponse(data)
+
+def simulation_status(request):
+  """
+  Lightweight status endpoint so the frontend can stop polling/rendering once
+  a diagnosis is produced (diagnosis_ready=true).
+  """
+  return JsonResponse(_read_simulation_controller())
 
 def landing(request): 
   context = {}
@@ -349,6 +350,8 @@ def update_environment(request):
     with open(f"storage/{sim_code}/movement/{step}.json") as json_file: 
       response_data = json.load(json_file)
       response_data["<step>"] = step
+  else:
+    response_data.update(_read_simulation_controller())
 
   return JsonResponse(response_data)
 

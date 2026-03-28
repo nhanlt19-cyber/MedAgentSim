@@ -148,8 +148,9 @@
 
 	// <timer_max> determines how frequently our update function will query the 
 	// frontend server. If it's higher, we wait longer cycles. 
-	let timer_max = 0;
+	let timer_max = 6;
 	let timer = timer_max;
+	let updateMissCount = 0;
 
 	// <phase> -- there are three phases: "process," "update," and "execute."
 	let phase = "update"; // or "update" or "execute"
@@ -173,6 +174,8 @@
 	let diagnosisRendered = false;
 	let status_timer_max = 10; // check status every N frames (lightweight)
 	let status_timer = status_timer_max;
+	let statusRequestInFlight = false;
+	let updateRequestInFlight = false;
 	function stopSimulationFrontend(reason) {
 	  if (simulationStopped) return;
 	  simulationStopped = true;
@@ -464,7 +467,8 @@
 	  // Before polling for new movement, periodically check diagnosis_ready and stop UI.
 	  if (status_timer <= 0) {
 	    status_timer = status_timer_max;
-	    try {
+	    if (!statusRequestInFlight) try {
+	      statusRequestInFlight = true;
 	      var status_xobj = new XMLHttpRequest();
 	      status_xobj.overrideMimeType("application/json");
 	      status_xobj.open('GET', "{% url 'simulation_status' %}", true);
@@ -484,9 +488,12 @@
 	            }
 	          }
 	        }
+	        statusRequestInFlight = false;
 	      });
+	      status_xobj.addEventListener("error", function() { statusRequestInFlight = false; });
+	      status_xobj.addEventListener("abort", function() { statusRequestInFlight = false; });
 	      status_xobj.send(null);
-	    } catch (e) {}
+	    } catch (e) { statusRequestInFlight = false; }
 	  } else {
 	    status_timer = status_timer - 1;
 	  }
@@ -530,20 +537,39 @@
 	    // Note that we do not want to overburden the backend too much by 
 	    // over-querying; so, we have a timer set so we only query it once every
 	    // timer_max cycles. 
-	    if (timer <= 0) {
+	    if (timer <= 0 && !updateRequestInFlight) {
+	      updateRequestInFlight = true;
 	      var update_xobj = new XMLHttpRequest();
 	      update_xobj.overrideMimeType("application/json");
 	      update_xobj.open('POST', "{% url 'update_environment' %}", true);
 	      update_xobj.addEventListener("load", function() {
 	        if (this.readyState === 4) {
 	          if (update_xobj.status === 200) {
-	            if (JSON.parse(update_xobj.responseText)["<step>"] == step) {
-	              execute_movement = JSON.parse(update_xobj.responseText)
+	            let payload = {};
+	            try { payload = JSON.parse(update_xobj.responseText) || {}; } catch (e) { payload = {}; }
+	            if (payload["<step>"] == step) {
+	              updateMissCount = 0;
+	              execute_movement = payload
 	              phase = "execute";
+	            } else if (payload["<step>"] === -1 && diagnosisReadyFlag) {
+	              stopSimulationFrontend("no_more_movement");
+	            } else {
+	              updateMissCount = Math.min(updateMissCount + 1, 20);
 	            }
-	            timer = timer_max;
+	            timer = timer_max + (updateMissCount * 6);
 	          }
 	        }
+	        updateRequestInFlight = false;
+	      });
+	      update_xobj.addEventListener("error", function() {
+	        updateMissCount = Math.min(updateMissCount + 1, 20);
+	        timer = timer_max + (updateMissCount * 10);
+	        updateRequestInFlight = false;
+	      });
+	      update_xobj.addEventListener("abort", function() {
+	        updateMissCount = Math.min(updateMissCount + 1, 20);
+	        timer = timer_max + (updateMissCount * 10);
+	        updateRequestInFlight = false;
 	      });
 	      update_xobj.send(JSON.stringify({"step": step, "sim_code": sim_code }));   
 	    }
