@@ -8,6 +8,8 @@ from medsim.core.agent import MeasurementAgent, PatientAgent, DoctorAgent, compa
 from medsim.core.scenario import *
 from medsim.query_model import *
 
+SCRIPT_END_MARKER = "<<<END>>>"
+
 def _apply_env_model_overrides(doctor_llm, patient_llm, measurement_llm, moderator_llm):
     """
     Allow exact remote model names to override CLI defaults when running
@@ -77,13 +79,65 @@ def _read_human_input(prompt: str) -> str:
         if line == "":
             break  # EOF
         line = line.rstrip("\n")
-        if line.strip() == "<<<END>>>":
+        if line.strip() == SCRIPT_END_MARKER:
             break
         lines.append(line)
     return "\n".join(lines).strip()
+
+
+class ScriptedHumanInput:
+    """
+    Deterministic replacement for interactive human_patient input.
+
+    File format:
+    - JSON object with key "responses": [ ... ]
+    - or a root JSON array of strings
+    """
+
+    def __init__(self, script_path: str):
+        self.script_path = os.path.abspath(script_path)
+        with open(self.script_path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+
+        if isinstance(payload, dict):
+            self.name = payload.get("name") or os.path.basename(self.script_path)
+            responses = payload.get("responses")
+        elif isinstance(payload, list):
+            self.name = os.path.basename(self.script_path)
+            responses = payload
+        else:
+            raise ValueError(
+                f"Unsupported scripted input format in {self.script_path!r}. "
+                "Expected a JSON object with 'responses' or a JSON array."
+            )
+
+        if not isinstance(responses, list) or not all(isinstance(x, str) for x in responses):
+            raise ValueError(
+                f"Invalid 'responses' in {self.script_path!r}. Expected a list of strings."
+            )
+
+        self.responses = [x.strip() for x in responses if x is not None]
+        self.index = 0
+
+    def next_response(self, prompt: str) -> str:
+        if self.index >= len(self.responses):
+            raise RuntimeError(
+                f"Scripted input exhausted for {self.script_path!r} after {self.index} responses. "
+                "Add more responses to the script or use a scenario that terminates earlier."
+            )
+
+        response = self.responses[self.index]
+        self.index += 1
+        print(prompt, end="", flush=True)
+        print(f"(scripted input {self.index}/{len(self.responses)} from {self.name})")
+        print(response)
+        return response
+
+
 def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor_llm, patient_llm,
          measurement_llm, moderator_llm, num_scenarios, dataset, img_request, total_inferences,
-         anthropic_api_key=None, output_dir=None, server_url: str | None = None, server_token: str | None = None):
+         anthropic_api_key=None, output_dir=None, server_url: str | None = None,
+         server_token: str | None = None, human_patient_script: str | None = None):
     openai.api_key = api_key
     anthropic_llms = ["claude3.5sonnet"]
     replicate_llms = ["llama-3-70b-instruct", "llama-2-70b-chat", "mixtral-8x7b"]
@@ -131,8 +185,17 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
     total_correct = 0
     total_presents = 0
 
+    if human_patient_script and inf_type != "human_patient":
+        raise ValueError("--human_patient_script only works with --inf_type human_patient")
+
     if num_scenarios is None:
         num_scenarios = scenario_loader.num_scenarios
+
+    if human_patient_script and num_scenarios != 1:
+        raise ValueError(
+            "--human_patient_script currently supports exactly one scenario per run. "
+            "Use --num_scenarios 1 and choose the case with --start_scenario."
+        )
     
     meas_agent = MeasurementAgent(backend_str=measurement_llm)
     patient_agent = PatientAgent(backend_str=patient_llm)
@@ -150,6 +213,9 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
         total_presents += 1
         pi_dialogue = ""
         dialogue_history = []
+        scripted_reader = (
+            ScriptedHumanInput(human_patient_script) if human_patient_script else None
+        )
         
         # Initialize scenario and agents
         scenario = scenario_loader.get_scenario(id=_scenario_id)
@@ -247,7 +313,10 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
             else:
                 # Obtain patient's response
                 if inf_type == "human_patient":
-                    pi_dialogue = _read_human_input("\nResponse to doctor: ")
+                    if scripted_reader is not None:
+                        pi_dialogue = scripted_reader.next_response("\nResponse to doctor: ")
+                    else:
+                        pi_dialogue = _read_human_input("\nResponse to doctor: ")
                 else:
                     pi_dialogue = patient_agent.inference_patient(doctor_dialogue)
                 patient_text = f"Patient [{int(((_inf_id+1)/total_inferences)*100)}%]: {pi_dialogue}"
@@ -298,6 +367,13 @@ if __name__ == "__main__":
         required=False,
         help='Bearer token for remote endpoint (optional). Also reads from $SERVER_TOKEN.',
     )
+    parser.add_argument(
+        '--human_patient_script',
+        type=str,
+        default=os.environ.get("HUMAN_PATIENT_SCRIPT"),
+        required=False,
+        help='Path to a JSON file containing scripted patient responses. Only valid with --inf_type human_patient.',
+    )
     
     args = parser.parse_args()
 
@@ -322,6 +398,7 @@ if __name__ == "__main__":
         args.output_dir,
         args.server_url,
         args.server_token,
+        args.human_patient_script,
     )
 
 
