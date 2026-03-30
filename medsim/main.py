@@ -91,6 +91,9 @@ class ScriptedHumanInput:
 
     File format:
     - JSON object with key "responses": [ ... ]
+      Optional keys:
+      - "fallback_response": str
+      - "repeat_last_on_exhaustion": bool (default: true)
     - or a root JSON array of strings
     """
 
@@ -102,9 +105,13 @@ class ScriptedHumanInput:
         if isinstance(payload, dict):
             self.name = payload.get("name") or os.path.basename(self.script_path)
             responses = payload.get("responses")
+            self.fallback_response = (payload.get("fallback_response") or "").strip() or None
+            self.repeat_last_on_exhaustion = payload.get("repeat_last_on_exhaustion", True)
         elif isinstance(payload, list):
             self.name = os.path.basename(self.script_path)
             responses = payload
+            self.fallback_response = None
+            self.repeat_last_on_exhaustion = True
         else:
             raise ValueError(
                 f"Unsupported scripted input format in {self.script_path!r}. "
@@ -121,10 +128,25 @@ class ScriptedHumanInput:
 
     def next_response(self, prompt: str) -> str:
         if self.index >= len(self.responses):
-            raise RuntimeError(
-                f"Scripted input exhausted for {self.script_path!r} after {self.index} responses. "
-                "Add more responses to the script or use a scenario that terminates earlier."
+            if self.fallback_response:
+                response = self.fallback_response
+                mode = "fallback_response"
+            elif self.repeat_last_on_exhaustion and self.responses:
+                response = self.responses[-1]
+                mode = "repeat_last_response"
+            else:
+                raise RuntimeError(
+                    f"Scripted input exhausted for {self.script_path!r} after {self.index} responses. "
+                    "Add more responses to the script, set 'fallback_response', or enable "
+                    "'repeat_last_on_exhaustion'."
+                )
+
+            print(prompt, end="", flush=True)
+            print(
+                f"(scripted input exhausted after {self.index} responses in {self.name}; using {mode})"
             )
+            print(response)
+            return response
 
         response = self.responses[self.index]
         self.index += 1
