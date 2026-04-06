@@ -133,6 +133,54 @@ def summarize_group(rows: list[dict]) -> dict:
     }
 
 
+def build_no_results_error(root: Path, scenario_ids: list[int], attacks: list[str], timings: list[str]) -> str:
+    expected_dirs = []
+    for scenario_id in scenario_ids[:2]:
+        expected_dirs.append(str(root / f"s{scenario_id}_baseline"))
+        for attack in attacks[:2]:
+            for timing in timings[:2]:
+                expected_dirs.append(str(root / f"s{scenario_id}_attack_{attack}_{timing}"))
+
+    available_entries = []
+    if root.exists():
+        available_entries = sorted(path.name for path in root.glob("s*"))
+
+    nearby_output_roots = []
+    if root.parent.exists():
+        nearby_output_roots = sorted(str(path) for path in root.parent.glob("output_eval_medqa_openpi*"))
+
+    message = [
+        f"No matching MedQA benchmark runs were found under: {root}",
+        "",
+        "Expected directories include examples such as:",
+    ]
+    message.extend(f"- {item}" for item in expected_dirs[:6])
+    message.append("")
+
+    if available_entries:
+        message.append("Entries currently found under the provided root:")
+        message.extend(f"- {item}" for item in available_entries[:20])
+        message.append("")
+
+    if nearby_output_roots:
+        message.append("Nearby benchmark output roots detected:")
+        message.extend(f"- {item}" for item in nearby_output_roots[:10])
+        message.append("")
+
+    message.extend(
+        [
+            "Common causes:",
+            "- The matrix runner wrote to a different OUTPUT_ROOT than the one passed to summarize.",
+            "- OUTPUT_ROOT was given as a relative path and the runner was launched from a different working directory.",
+            "- The requested attack/timing combinations were never executed.",
+            "- The runner failed before writing any scenario_* folders.",
+            "",
+            "Re-run the matrix with the patched runner or point --root to the real output directory.",
+        ]
+    )
+    return "\n".join(message)
+
+
 def main() -> int:
     script_path = Path(__file__).resolve()
     parser = argparse.ArgumentParser(description="Summarize MedQA OpenPI benchmark outputs.")
@@ -200,6 +248,9 @@ def main() -> int:
                 }
                 details.append(row)
                 grouped[group_key].append(row)
+
+    if not details:
+        raise RuntimeError(build_no_results_error(root, scenario_ids, attacks, timings))
 
     summaries = []
     for group_key, rows in grouped.items():

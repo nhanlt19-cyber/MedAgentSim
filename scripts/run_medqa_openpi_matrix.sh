@@ -5,6 +5,21 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MEDSIM_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 WORKSPACE_ROOT="$(cd "${MEDSIM_ROOT}/.." && pwd)"
 
+resolve_path() {
+  python3 - "$1" "$2" <<'PY'
+import os
+import sys
+
+base = sys.argv[1]
+path = sys.argv[2]
+
+if os.path.isabs(path):
+    print(os.path.abspath(path))
+else:
+    print(os.path.abspath(os.path.join(base, path)))
+PY
+}
+
 BRIDGE_SCRIPT="${WORKSPACE_ROOT}/attack/run_medqa_openpi_bridge.py"
 CASES_FILE="${CASES_FILE:-${MEDSIM_ROOT}/scripted_inputs_medqa/medqa_benchmark_cases.json}"
 SCRIPT_INPUT_DIR="${SCRIPT_INPUT_DIR:-${MEDSIM_ROOT}/scripted_inputs_medqa}"
@@ -23,6 +38,10 @@ MODERATOR_LLM="${MODERATOR_LLM:-${MODEL}}"
 
 REGENERATE_SCRIPTS="${REGENERATE_SCRIPTS:-1}"
 CLEAN_GENERATED_SCRIPTS="${CLEAN_GENERATED_SCRIPTS:-0}"
+
+CASES_FILE="$(resolve_path "${MEDSIM_ROOT}" "${CASES_FILE}")"
+SCRIPT_INPUT_DIR="$(resolve_path "${MEDSIM_ROOT}" "${SCRIPT_INPUT_DIR}")"
+OUTPUT_ROOT="$(resolve_path "${MEDSIM_ROOT}" "${OUTPUT_ROOT}")"
 
 mkdir -p "${SCRIPT_INPUT_DIR}" "${OUTPUT_ROOT}"
 
@@ -55,18 +74,21 @@ run_case() {
 
   echo
   echo "=== Running scenario ${scenario_id} -> ${output_dir} ==="
-  python3 "${MEDSIM_ROOT}/medsim/main.py" \
-    --inf_type human_patient \
-    --agent_dataset MedQA \
-    --num_scenarios 1 \
-    --start_scenario "${scenario_id}" \
-    --total_inferences "${TOTAL_INFERENCES}" \
-    --doctor_llm "${DOCTOR_LLM}" \
-    --measurement_llm "${MEASUREMENT_LLM}" \
-    --moderator_llm "${MODERATOR_LLM}" \
-    --doctor_image_request "${DOCTOR_IMAGE_REQUEST}" \
-    --human_patient_script "${script_path}" \
-    --output_dir "${output_dir}"
+  (
+    cd "${MEDSIM_ROOT}"
+    python3 "${MEDSIM_ROOT}/medsim/main.py" \
+      --inf_type human_patient \
+      --agent_dataset MedQA \
+      --num_scenarios 1 \
+      --start_scenario "${scenario_id}" \
+      --total_inferences "${TOTAL_INFERENCES}" \
+      --doctor_llm "${DOCTOR_LLM}" \
+      --measurement_llm "${MEASUREMENT_LLM}" \
+      --moderator_llm "${MODERATOR_LLM}" \
+      --doctor_image_request "${DOCTOR_IMAGE_REQUEST}" \
+      --human_patient_script "${script_path}" \
+      --output_dir "${output_dir}"
+  )
 }
 
 for scenario_id in "${SCENARIO_ARRAY[@]}"; do
