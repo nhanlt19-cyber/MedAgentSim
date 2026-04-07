@@ -54,11 +54,29 @@ Lam viec tu **root repo** (thu muc chua ca `MedAgentSim/` va `attack/`). Dung `p
 
 ### 1) Tao manifest 107 case (mot lan, hoac khi doi `_medqa.jsonl`)
 
+Tu **root repo** (thu muc co `MedAgentSim/` va thu muc `attack/` chua `run_medqa_openpi_bridge.py`):
+
 ```bash
 cd /path/to/your/attack-repo
 python3 attack/run_medqa_openpi_bridge.py build-manifest-medqa \
   --merge-from MedAgentSim/scripted_inputs_medqa/medqa_benchmark_cases.json
 ```
+
+Neu dang dung trong thu muc `MedAgentSim/`:
+
+```bash
+cd /path/to/your/attack-repo/MedAgentSim
+python3 ../attack/run_medqa_openpi_bridge.py build-manifest-medqa \
+  --merge-from ./scripted_inputs_medqa/medqa_benchmark_cases.json
+```
+
+Kiem tra phien ban script (phai thay `build-manifest-medqa` trong help):
+
+```bash
+python3 ../attack/run_medqa_openpi_bridge.py --help
+```
+
+Neu help chi co `{list-cases,generate}` thi file tren server **chua dong bo** voi repo: copy lai `attack/run_medqa_openpi_bridge.py` day du. Co the dung alias: `build_manifest_medqa` thay cho `build-manifest-medqa`.
 
 Ket qua mac dinh: `MedAgentSim/scripted_inputs_medqa/medqa_all_107_cases.json`.
 
