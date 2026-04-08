@@ -2,6 +2,7 @@ import argparse
 import json
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -280,6 +281,18 @@ def main() -> int:
     if not details:
         raise RuntimeError(build_no_results_error(root, scenario_ids, attacks, timings))
 
+    missing_by_group: dict[str, list[int]] = {}
+    for attack in attacks:
+        for timing in timings:
+            present = {
+                r["scenario_id"]
+                for r in details
+                if r["attack"] == attack and r["timing"] == timing
+            }
+            missing = sorted(set(scenario_ids) - present)
+            if missing:
+                missing_by_group[f"{attack}:{timing}"] = missing
+
     summaries = []
     for group_key, rows in grouped.items():
         attack, timing = group_key.split(":", 1)
@@ -313,9 +326,29 @@ def main() -> int:
         ),
     }
 
+    aggregation_meta = {
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "cases_file": str(Path(args.cases_file).resolve()),
+        "output_root": str(root),
+        "script_input_dir": str(script_input_dir),
+        "attacks": attacks,
+        "timings": timings,
+        "scenario_ids_requested": scenario_ids,
+        "num_scenarios_requested": len(scenario_ids),
+        "num_detail_rows": len(details),
+        "num_summaries": len(summaries),
+        "missing_runs_by_attack_timing": missing_by_group if missing_by_group else {},
+        "note": (
+            "Each detail row is one (scenario, attack, timing) with both baseline and attack "
+            "directories present. Scenarios listed in missing_runs_by_attack_timing lack "
+            "s{sid}_baseline or s{sid}_attack_{attack}_{timing} under output_root."
+        ),
+    }
+
     payload = {
         "root": str(root),
         "scenarios": scenario_ids,
+        "aggregation_meta": aggregation_meta,
         "summaries": summaries,
         "details": details,
         "metric_notes": metric_notes,

@@ -107,6 +107,39 @@ cd MedAgentSim
 bash scripts/run_medqa_openpi_matrix.sh
 ```
 
+### 4) Tong hop ket qua sau khi chay du 107 kich ban
+
+Tu thu muc `MedAgentSim/` (hoac root repo, dieu chinh duong dan tuong doi). **Bat buoc** chi ro manifest 107 case va thu muc output ban da dung khi chay batch:
+
+```bash
+cd /path/to/attack-repo/MedAgentSim
+
+python3 scripts/summarize_medqa_openpi_results.py \
+  --root ./output_eval_medqa_openpi \
+  --cases-file ./scripted_inputs_medqa/medqa_all_107_cases.json \
+  --script-input-dir ./scripted_inputs_medqa \
+  --attacks naive,ignore,escape,fake_comp,combine \
+  --timings late \
+  --output-json ./output_eval_medqa_openpi/summary_full_107_late.json \
+  --no-show-openpi-metrics
+```
+
+- Neu ban dung `OUTPUT_ROOT` khac, thay `--root` bang duong dan do (nen dung duong dan tuyet doi tren server).
+- Bo `--no-show-openpi-metrics` neu muon dong PNA-T / ASV / ... in ra **stderr**.
+- File JSON gom: `aggregation_meta` (thoi gian, tham so, scenario thieu cap baseline/attack), `summaries` (moi attack), `details` (tung scenario), `metric_notes`.
+
+Neu chay ca `early` va `late`:
+
+```bash
+python3 scripts/summarize_medqa_openpi_results.py \
+  --root ./output_eval_medqa_openpi \
+  --cases-file ./scripted_inputs_medqa/medqa_all_107_cases.json \
+  --script-input-dir ./scripted_inputs_medqa \
+  --attacks naive,ignore,escape,fake_comp,combine \
+  --timings early,late \
+  --output-json ./output_eval_medqa_openpi/summary_full_107_early_late.json
+```
+
 ## Ghi chu
 
 - Cac file scripted trong thu muc nay co the duoc tao lai bat cu luc nao.
