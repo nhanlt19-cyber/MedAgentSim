@@ -3,6 +3,7 @@
 Run MedQA OpenPI matrix in batches (default 5 scenarios) with resume.
 
 Each scenario: baseline + all attack types (default: naive, ignore, escape, fake_comp, combine).
+Runs both injection timings by default (early + late); set TIMINGS=late or --timings late for late only.
 Skips a run if dialogue_history.json already exists under the expected output folder.
 
 Usage (from anywhere):
@@ -26,6 +27,9 @@ from pathlib import Path
 
 VALID_ATTACKS = ("naive", "ignore", "escape", "fake_comp", "combine")
 VALID_TIMINGS = ("early", "late")
+
+# Default: both timings (full OpenPI-style matrix). Override with --timings late or env TIMINGS=late.
+_DEFAULT_TIMINGS = (os.environ.get("TIMINGS") or "early,late").strip() or "early,late"
 
 
 def _repo_paths() -> tuple[Path, Path, Path]:
@@ -107,7 +111,11 @@ def main() -> int:
         default=",".join(VALID_ATTACKS),
         help="Comma-separated attack types.",
     )
-    parser.add_argument("--timings", default="late", help="Comma-separated: early, late.")
+    parser.add_argument(
+        "--timings",
+        default=_DEFAULT_TIMINGS,
+        help="Comma-separated: early, late. Default: early,late (or $TIMINGS). Use --timings late to skip early runs.",
+    )
     parser.add_argument("--total-inferences", type=int, default=10)
     parser.add_argument("--doctor-llm", default=os.environ.get("DOCTOR_LLM", os.environ.get("REMOTE_LLM_MODEL", "Qwen3.5-27B-Q4_K_M.gguf")))
     parser.add_argument("--measurement-llm", default=os.environ.get("MEASUREMENT_LLM", ""))

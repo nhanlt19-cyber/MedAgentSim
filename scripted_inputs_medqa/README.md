@@ -85,6 +85,9 @@ Ket qua mac dinh: `MedAgentSim/scripted_inputs_medqa/medqa_all_107_cases.json`.
 ```bash
 export DOCTOR_LLM="${DOCTOR_LLM:-Qwen3.5-27B-Q4_K_M.gguf}"
 # tuy chon: OUTPUT_ROOT, GLOBAL_TARGET, DOCTOR_IMAGE_REQUEST, v.v.
+# Mac dinh script chay ca early va late. Chi chay late (re hon) thi dat:
+#   export TIMINGS=late
+# hoac them: --timings late
 
 for i in $(seq 0 21); do
   python3 MedAgentSim/scripts/run_medqa_openpi_batch_resume.py --batch-index "$i"
@@ -92,7 +95,7 @@ done
 ```
 
 - `seq 0 21`: 22 batch (107 scenario, batch 5).
-- Ket qua mac dinh: `MedAgentSim/output_eval_medqa_openpi/s<id>_baseline` va `s<id>_attack_<attack>_late`.
+- Ket qua mac dinh: `s<id>_baseline` va `s<id>_attack_<attack>_early` **va** `s<id>_attack_<attack>_late` (tru khi `TIMINGS=late` hoac `--timings late`).
 
 Chay thu (khong goi LLM):
 
