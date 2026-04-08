@@ -145,5 +145,6 @@ python3 scripts/summarize_medqa_openpi_results.py \
 
 ## Ghi chu
 
+- `medsim/main.py` (human_patient + script attack): sau `REQUEST TEST` / ket qua Measurement, neu van chua doc het cau scripted toi `injection_turn`, he thong se **bu them luot Patient** de dong attack (early/late) thuc su vao `dialogue_history` va ngữ canh bac si. Neu van thieu (hiem), log canh bao khi `DIAGNOSIS READY` som. Sau khi cap nhat, can **chay lai** cac scenario attack (xoa thu muc `s*_attack_*` tuong ung hoac tat resume) de ghi lai log moi.
 - Cac file scripted trong thu muc nay co the duoc tao lai bat cu luc nao.
 - `run_medqa_openpi_matrix.sh` tu dong goi bridge de sinh scripted; batch resume cung goi bridge cho dung scenario trong batch.

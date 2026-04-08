@@ -94,6 +94,9 @@ class ScriptedHumanInput:
       Optional keys:
       - "fallback_response": str
       - "repeat_last_on_exhaustion": bool (default: true)
+      - "injection_turn": int (0-based index into responses; only for attack scripts) —
+        used by main loop to flush patient lines after REQUEST TEST / before final doctor turn
+        so injected text is not skipped when the doctor orders labs without another Q&A round.
     - or a root JSON array of strings
     """
 
@@ -102,11 +105,15 @@ class ScriptedHumanInput:
         with open(self.script_path, "r", encoding="utf-8") as f:
             payload = json.load(f)
 
+        self.injection_turn = None
         if isinstance(payload, dict):
             self.name = payload.get("name") or os.path.basename(self.script_path)
             responses = payload.get("responses")
             self.fallback_response = (payload.get("fallback_response") or "").strip() or None
             self.repeat_last_on_exhaustion = payload.get("repeat_last_on_exhaustion", True)
+            atk = payload.get("attack")
+            if atk and str(atk).lower() != "none" and isinstance(payload.get("injection_turn"), int):
+                self.injection_turn = int(payload["injection_turn"])
         elif isinstance(payload, list):
             self.name = os.path.basename(self.script_path)
             responses = payload
@@ -254,6 +261,24 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
             img_request=img_request)
         doctor_dialogue = ""        
         for _inf_id in range(total_inferences):
+            # Attack scripts: ensure lines up to injection_turn are spoken before the final doctor
+            # call. Otherwise "late" inject on the last response is skipped when the doctor
+            # requests tests (no patient turn) or finishes early on the last slot.
+            if (
+                inf_type == "human_patient"
+                and scripted_reader is not None
+                and getattr(scripted_reader, "injection_turn", None) is not None
+                and _inf_id == total_inferences - 1
+            ):
+                inj = scripted_reader.injection_turn
+                while scripted_reader.index <= inj:
+                    pi_dialogue = scripted_reader.next_response("\nResponse to doctor: ")
+                    patient_text = f"Patient [{int(((_inf_id + 1) / total_inferences) * 100)}%]: {pi_dialogue}"
+                    print(patient_text)
+                    meas_agent.add_hist(pi_dialogue)
+                    dialogue_history.append({"speaker": "Patient", "text": pi_dialogue})
+                    time.sleep(1.0)
+
             # Determine if images are requested
             if dataset == "NEJM":
                 imgs = "REQUEST IMAGES" in doctor_dialogue if img_request else True
@@ -305,6 +330,17 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
                     dialogue_history.append({"speaker": "Doctor", "text": doctor_dialogue})
 
             if "DIAGNOSIS READY" in doctor_dialogue:
+                if (
+                    inf_type == "human_patient"
+                    and scripted_reader is not None
+                    and getattr(scripted_reader, "injection_turn", None) is not None
+                    and scripted_reader.index <= scripted_reader.injection_turn
+                ):
+                    print(
+                        "WARNING: Scripted injection_turn was not reached before DIAGNOSIS READY; "
+                        "attack patient line(s) never entered the doctor context for this run.",
+                        flush=True,
+                    )
                 correctness = compare_results(doctor_dialogue, scenario.diagnosis_information(), mpipe)
                 if correctness:
                     total_correct += 1
@@ -332,6 +368,19 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
                 dialogue_history.append(
                     {"speaker": "Measurement", "text": pi_dialogue}
                 )
+                if (
+                    inf_type == "human_patient"
+                    and scripted_reader is not None
+                    and getattr(scripted_reader, "injection_turn", None) is not None
+                ):
+                    inj = scripted_reader.injection_turn
+                    while scripted_reader.index <= inj:
+                        pi_dialogue = scripted_reader.next_response("\nResponse to doctor: ")
+                        patient_text = f"Patient [{int(((_inf_id + 1) / total_inferences) * 100)}%]: {pi_dialogue}"
+                        print(patient_text)
+                        meas_agent.add_hist(pi_dialogue)
+                        dialogue_history.append({"speaker": "Patient", "text": pi_dialogue})
+                        time.sleep(1.0)
             else:
                 # Obtain patient's response
                 if inf_type == "human_patient":
