@@ -106,11 +106,22 @@ class ScriptedHumanInput:
             payload = json.load(f)
 
         self.injection_turn = None
+        self.run_type = "baseline"
+        self.attack = "none"
+        self.timing = "none"
+        self.target = ""
+        self.all_turns_malicious = False
+        self.last_response_meta = None
         if isinstance(payload, dict):
             self.name = payload.get("name") or os.path.basename(self.script_path)
             responses = payload.get("responses")
             self.fallback_response = (payload.get("fallback_response") or "").strip() or None
             self.repeat_last_on_exhaustion = payload.get("repeat_last_on_exhaustion", True)
+            self.run_type = str(payload.get("run_type") or "baseline")
+            self.attack = str(payload.get("attack") or "none")
+            self.timing = str(payload.get("timing") or "none")
+            self.target = str(payload.get("target") or "")
+            self.all_turns_malicious = bool(payload.get("all_turns_malicious", False))
             atk = payload.get("attack")
             if atk and str(atk).lower() != "none" and isinstance(payload.get("injection_turn"), int):
                 self.injection_turn = int(payload["injection_turn"])
@@ -133,6 +144,19 @@ class ScriptedHumanInput:
         self.responses = [x.strip() for x in responses if x is not None]
         self.index = 0
 
+    def run_metadata(self) -> dict:
+        return {
+            "script_path": self.script_path,
+            "script_name": self.name,
+            "run_type": self.run_type,
+            "attack": self.attack,
+            "timing": self.timing,
+            "target": self.target,
+            "injection_turn": self.injection_turn,
+            "all_turns_malicious": self.all_turns_malicious,
+            "num_scripted_responses": len(self.responses),
+        }
+
     def next_response(self, prompt: str) -> str:
         if self.index >= len(self.responses):
             if self.fallback_response:
@@ -153,20 +177,39 @@ class ScriptedHumanInput:
                 f"(scripted input exhausted after {self.index} responses in {self.name}; using {mode})"
             )
             print(response)
+            response_index = max(len(self.responses) - 1, 0)
+            is_malicious = self.all_turns_malicious or (
+                self.injection_turn is not None and response_index == self.injection_turn
+            )
+            self.last_response_meta = {
+                "response_index": response_index,
+                "is_malicious": bool(is_malicious),
+                "source_mode": mode,
+            }
             return response
 
+        response_index = self.index
         response = self.responses[self.index]
         self.index += 1
         print(prompt, end="", flush=True)
         print(f"(scripted input {self.index}/{len(self.responses)} from {self.name})")
         print(response)
+        is_malicious = self.all_turns_malicious or (
+            self.injection_turn is not None and response_index == self.injection_turn
+        )
+        self.last_response_meta = {
+            "response_index": response_index,
+            "is_malicious": bool(is_malicious),
+            "source_mode": "scripted_response",
+        }
         return response
 
 
 def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor_llm, patient_llm,
          measurement_llm, moderator_llm, num_scenarios, dataset, img_request, total_inferences,
          anthropic_api_key=None, output_dir=None, server_url: str | None = None,
-         server_token: str | None = None, human_patient_script: str | None = None):
+         server_token: str | None = None, human_patient_script: str | None = None,
+         prompt_injection_defense: str = "none"):
     openai.api_key = api_key
     anthropic_llms = ["claude3.5sonnet"]
     replicate_llms = ["llama-3-70b-instruct", "llama-2-70b-chat", "mixtral-8x7b"]
@@ -245,6 +288,9 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
         scripted_reader = (
             ScriptedHumanInput(human_patient_script) if human_patient_script else None
         )
+        current_prompt_source = "initial"
+        current_prompt_is_malicious = False
+        current_response_index = None
         
         # Initialize scenario and agents
         scenario = scenario_loader.get_scenario(id=_scenario_id)
@@ -258,7 +304,17 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
             scenario=scenario, 
             bias_present=doctor_bias,
             max_infs=total_inferences, 
-            img_request=img_request)
+            img_request=img_request,
+            prompt_injection_defense=prompt_injection_defense)
+        run_metadata = {
+            "scenario_id": _scenario_id,
+            "dataset": dataset,
+            "prompt_injection_defense": prompt_injection_defense,
+            "human_patient_script": os.path.abspath(human_patient_script) if human_patient_script else "",
+        }
+        if scripted_reader is not None:
+            run_metadata.update(scripted_reader.run_metadata())
+        dialogue_history.append({"RUN_METADATA": run_metadata})
         doctor_dialogue = ""        
         for _inf_id in range(total_inferences):
             # Attack scripts: ensure lines up to injection_turn are spoken before the final doctor
@@ -273,6 +329,15 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
                 inj = scripted_reader.injection_turn
                 while scripted_reader.index <= inj:
                     pi_dialogue = scripted_reader.next_response("\nResponse to doctor: ")
+                    current_prompt_source = "patient_script"
+                    current_prompt_is_malicious = bool(
+                        scripted_reader.last_response_meta and scripted_reader.last_response_meta.get("is_malicious")
+                    )
+                    current_response_index = (
+                        scripted_reader.last_response_meta.get("response_index")
+                        if scripted_reader.last_response_meta
+                        else None
+                    )
                     patient_text = f"Patient [{int(((_inf_id + 1) / total_inferences) * 100)}%]: {pi_dialogue}"
                     print(patient_text)
                     meas_agent.add_hist(pi_dialogue)
@@ -294,6 +359,18 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
                 doctor_dialogue = _read_human_input("\nQuestion for patient: ")
             else:
                 doctor_dialogue = doctor_agent.inference_doctor(pi_dialogue, image_requested=imgs)
+                if doctor_agent.last_defense_event is not None:
+                    defense_event = dict(doctor_agent.last_defense_event)
+                    defense_event.update(
+                        {
+                            "turn_index": _inf_id,
+                            "prompt_source": current_prompt_source,
+                            "ground_truth_malicious": bool(current_prompt_is_malicious),
+                            "response_index": current_response_index,
+                            "forced_final": False,
+                        }
+                    )
+                    dialogue_history.append({"PROMPT_DEFENSE": defense_event})
 
             # Log and print the doctor's dialogue
             dialogue_text = f"Doctor [{int(((_inf_id+1)/total_inferences)*100)}%]: {doctor_dialogue}"
@@ -314,6 +391,18 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
                 forced_reply = doctor_agent.inference_doctor(
                     pi_dialogue + "\n" + forced_prompt, image_requested=imgs
                 )
+                if doctor_agent.last_defense_event is not None:
+                    defense_event = dict(doctor_agent.last_defense_event)
+                    defense_event.update(
+                        {
+                            "turn_index": _inf_id,
+                            "prompt_source": current_prompt_source,
+                            "ground_truth_malicious": bool(current_prompt_is_malicious),
+                            "response_index": current_response_index,
+                            "forced_final": True,
+                        }
+                    )
+                    dialogue_history.append({"PROMPT_DEFENSE": defense_event})
                 dialogue_text = f"Doctor [forced-final]: {forced_reply}"
                 print(dialogue_text)
                 dialogue_history.append({"speaker": "Doctor", "text": forced_reply})
@@ -362,6 +451,9 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
             # Handle medical exam request
             if "REQUEST TEST" in doctor_dialogue:
                 pi_dialogue = meas_agent.inference_measurement(doctor_dialogue)
+                current_prompt_source = "measurement"
+                current_prompt_is_malicious = False
+                current_response_index = None
                 measurement_text = f"Measurement [{int(((_inf_id+1)/total_inferences)*100)}%]: {pi_dialogue}"
                 print(measurement_text)
                 patient_agent.add_hist(pi_dialogue)
@@ -376,6 +468,15 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
                     inj = scripted_reader.injection_turn
                     while scripted_reader.index <= inj:
                         pi_dialogue = scripted_reader.next_response("\nResponse to doctor: ")
+                        current_prompt_source = "patient_script"
+                        current_prompt_is_malicious = bool(
+                            scripted_reader.last_response_meta and scripted_reader.last_response_meta.get("is_malicious")
+                        )
+                        current_response_index = (
+                            scripted_reader.last_response_meta.get("response_index")
+                            if scripted_reader.last_response_meta
+                            else None
+                        )
                         patient_text = f"Patient [{int(((_inf_id + 1) / total_inferences) * 100)}%]: {pi_dialogue}"
                         print(patient_text)
                         meas_agent.add_hist(pi_dialogue)
@@ -386,10 +487,25 @@ def main(api_key, replicate_api_key, inf_type, doctor_bias, patient_bias, doctor
                 if inf_type == "human_patient":
                     if scripted_reader is not None:
                         pi_dialogue = scripted_reader.next_response("\nResponse to doctor: ")
+                        current_prompt_source = "patient_script"
+                        current_prompt_is_malicious = bool(
+                            scripted_reader.last_response_meta and scripted_reader.last_response_meta.get("is_malicious")
+                        )
+                        current_response_index = (
+                            scripted_reader.last_response_meta.get("response_index")
+                            if scripted_reader.last_response_meta
+                            else None
+                        )
                     else:
                         pi_dialogue = _read_human_input("\nResponse to doctor: ")
+                        current_prompt_source = "human_patient"
+                        current_prompt_is_malicious = False
+                        current_response_index = None
                 else:
                     pi_dialogue = patient_agent.inference_patient(doctor_dialogue)
+                    current_prompt_source = "patient_model"
+                    current_prompt_is_malicious = False
+                    current_response_index = None
                 patient_text = f"Patient [{int(((_inf_id+1)/total_inferences)*100)}%]: {pi_dialogue}"
                 print(patient_text)
                 meas_agent.add_hist(pi_dialogue)
@@ -445,6 +561,13 @@ if __name__ == "__main__":
         required=False,
         help='Path to a JSON file containing scripted patient responses. Only valid with --inf_type human_patient.',
     )
+    parser.add_argument(
+        '--prompt_injection_defense',
+        type=str,
+        default=os.environ.get("PROMPT_INJECTION_DEFENSE", "none"),
+        required=False,
+        help='Prompt-injection defense mode for doctor input. Supported: none, llm_based.',
+    )
     
     args = parser.parse_args()
 
@@ -470,6 +593,7 @@ if __name__ == "__main__":
         args.server_url,
         args.server_token,
         args.human_patient_script,
+        args.prompt_injection_defense,
     )
 
 

@@ -138,6 +138,17 @@ def main() -> int:
         help="Regenerate medqa_s*.json for this batch before running.",
     )
     parser.add_argument("--global-target", default=os.environ.get("GLOBAL_TARGET", ""))
+    parser.add_argument(
+        "--include-injected-only",
+        action=argparse.BooleanOptionalAction,
+        default=(os.environ.get("INCLUDE_INJECTED_ONLY", "").strip() in ("1", "true", "TRUE", "yes", "YES")),
+        help="Also run injected-only scripts for true PNA-I and MR.",
+    )
+    parser.add_argument(
+        "--prompt-injection-defense",
+        default=os.environ.get("PROMPT_INJECTION_DEFENSE", "none"),
+        help="Defense mode passed to medsim/main.py (e.g. none, llm_based).",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Print planned runs only.")
     args = parser.parse_args()
 
@@ -198,6 +209,8 @@ def main() -> int:
             "--timings",
             ",".join(timings),
         ]
+        if args.include_injected_only:
+            gen_cmd.append("--include-injected-only")
         if args.global_target.strip():
             gen_cmd += ["--global-target", args.global_target.strip()]
         if args.dry_run:
@@ -224,6 +237,10 @@ def main() -> int:
                 attack_script = script_input_dir / f"medqa_s{sid}_attack_{attack}_{timing}.json"
                 attack_out = output_root / f"s{sid}_attack_{attack}_{timing}"
                 plan.append((f"{sid}/{attack}/{timing}", attack_script, attack_out))
+                if args.include_injected_only:
+                    injected_only_script = script_input_dir / f"medqa_s{sid}_injected_only_{attack}_{timing}.json"
+                    injected_only_out = output_root / f"s{sid}_injected_only_{attack}_{timing}"
+                    plan.append((f"{sid}/injected_only/{attack}/{timing}", injected_only_script, injected_only_out))
 
     for label, script_path, out_dir in plan:
         if not script_path.is_file():
@@ -257,6 +274,8 @@ def main() -> int:
             moderator,
             "--doctor_image_request",
             args.doctor_image_request,
+            "--prompt_injection_defense",
+            args.prompt_injection_defense,
             "--human_patient_script",
             str(script_path),
             "--output_dir",

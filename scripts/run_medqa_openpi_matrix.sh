@@ -38,6 +38,8 @@ MODERATOR_LLM="${MODERATOR_LLM:-${MODEL}}"
 
 REGENERATE_SCRIPTS="${REGENERATE_SCRIPTS:-1}"
 CLEAN_GENERATED_SCRIPTS="${CLEAN_GENERATED_SCRIPTS:-0}"
+INCLUDE_INJECTED_ONLY="${INCLUDE_INJECTED_ONLY:-0}"
+PROMPT_INJECTION_DEFENSE="${PROMPT_INJECTION_DEFENSE:-none}"
 
 CASES_FILE="$(resolve_path "${MEDSIM_ROOT}" "${CASES_FILE}")"
 SCRIPT_INPUT_DIR="$(resolve_path "${MEDSIM_ROOT}" "${SCRIPT_INPUT_DIR}")"
@@ -56,6 +58,9 @@ if [[ "${REGENERATE_SCRIPTS}" == "1" ]]; then
   )
   if [[ -n "${GLOBAL_TARGET:-}" ]]; then
     GENERATE_CMD+=(--global-target "${GLOBAL_TARGET}")
+  fi
+  if [[ "${INCLUDE_INJECTED_ONLY}" == "1" ]]; then
+    GENERATE_CMD+=(--include-injected-only)
   fi
   if [[ "${CLEAN_GENERATED_SCRIPTS}" == "1" ]]; then
     GENERATE_CMD+=(--clean)
@@ -86,6 +91,7 @@ run_case() {
       --measurement_llm "${MEASUREMENT_LLM}" \
       --moderator_llm "${MODERATOR_LLM}" \
       --doctor_image_request "${DOCTOR_IMAGE_REQUEST}" \
+      --prompt_injection_defense "${PROMPT_INJECTION_DEFENSE}" \
       --human_patient_script "${script_path}" \
       --output_dir "${output_dir}"
   )
@@ -107,6 +113,11 @@ for scenario_id in "${SCENARIO_ARRAY[@]}"; do
       attack_script="${SCRIPT_INPUT_DIR}/medqa_s${scenario_id}_attack_${attack}_${timing}.json"
       attack_output="${OUTPUT_ROOT}/s${scenario_id}_attack_${attack}_${timing}"
       run_case "${scenario_id}" "${attack_script}" "${attack_output}"
+      if [[ "${INCLUDE_INJECTED_ONLY}" == "1" ]]; then
+        injected_only_script="${SCRIPT_INPUT_DIR}/medqa_s${scenario_id}_injected_only_${attack}_${timing}.json"
+        injected_only_output="${OUTPUT_ROOT}/s${scenario_id}_injected_only_${attack}_${timing}"
+        run_case "${scenario_id}" "${injected_only_script}" "${injected_only_output}"
+      fi
     done
   done
 done
