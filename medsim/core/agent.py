@@ -1197,7 +1197,7 @@ class MeasurementAgent:
         self.information = self.scenario.exam_information()
 
 
-def compare_results(diagnosis, correct_diagnosis, mod_pipe, similarity_threshold=0.8, tries=3, timeout=5.0):
+def compare_results(diagnosis, correct_diagnosis, mod_pipe, similarity_threshold=0.8, tries=3, timeout=30.0):
     """
     Compares the doctor's diagnosis with the correct diagnosis using a similarity-based approach.
 

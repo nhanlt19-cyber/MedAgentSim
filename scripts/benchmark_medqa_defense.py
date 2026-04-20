@@ -21,7 +21,15 @@ def _repo_paths() -> tuple[Path, Path, Path, Path]:
 
 def run_cmd(argv: list[str], cwd: Path) -> None:
     print("+", " ".join(argv), flush=True)
-    subprocess.run(argv, cwd=str(cwd), check=True)
+    env = os.environ.copy()
+    env.setdefault("LLM_QUERY_TRIES", "8")
+    env.setdefault("LLM_QUERY_TIMEOUT", "90")
+    env.setdefault("LLM_QUERY_REMOTE_MIN_TIMEOUT", "30")
+    env.setdefault("LLM_QUERY_CONNECT_TIMEOUT", "10")
+    env.setdefault("LLM_QUERY_SUCCESS_SLEEP", "1")
+    env.setdefault("LLM_QUERY_RETRY_SLEEP", "5")
+    env.setdefault("LLM_QUERY_RETRY_MAX_SLEEP", "20")
+    subprocess.run(argv, cwd=str(cwd), check=True, env=env)
 
 
 def build_parser() -> argparse.ArgumentParser:

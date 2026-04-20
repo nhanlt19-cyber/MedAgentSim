@@ -46,7 +46,27 @@ def _env_float(name: str, default: float) -> float:
 def _apply_llm_query_overrides(tries, timeout):
     env_tries = _env_int("LLM_QUERY_TRIES", tries)
     env_timeout = _env_float("LLM_QUERY_TIMEOUT", timeout)
+    if os.environ.get("SERVER_URL"):
+        min_remote_timeout = _env_float("LLM_QUERY_REMOTE_MIN_TIMEOUT", 30.0)
+        env_timeout = max(env_timeout, min_remote_timeout)
     return max(1, env_tries), max(1.0, env_timeout)
+
+
+def _build_request_timeout(timeout: float) -> tuple[float, float]:
+    read_timeout = max(1.0, float(timeout))
+    connect_timeout = _env_float(
+        "LLM_QUERY_CONNECT_TIMEOUT",
+        min(15.0, max(5.0, read_timeout / 3.0)),
+    )
+    return max(1.0, connect_timeout), read_timeout
+
+
+def _retry_sleep_seconds(timeout: float, attempt: int) -> float:
+    base_sleep = _env_float("LLM_QUERY_RETRY_SLEEP", min(5.0, max(1.0, timeout / 6.0)))
+    max_sleep = _env_float("LLM_QUERY_RETRY_MAX_SLEEP", max(base_sleep, min(30.0, timeout)))
+    if attempt <= 0:
+        return base_sleep
+    return min(max_sleep, base_sleep * (2 ** attempt))
 
 
 class BAgent:
@@ -434,12 +454,12 @@ class BAgent:
         if self.server_token:
             headers["Authorization"] = f"Bearer {self.server_token}"
         post_success_sleep = _env_float("LLM_QUERY_SUCCESS_SLEEP", 2.0)
-        retry_sleep = _env_float("LLM_QUERY_RETRY_SLEEP", timeout)
+        request_timeout = _build_request_timeout(timeout)
 
         for attempt in range(tries):
             try:
                 response = requests.post(
-                    self.server_url, headers=headers, json=payload, timeout=timeout
+                    self.server_url, headers=headers, json=payload, timeout=request_timeout
                 )
                 response.raise_for_status()
                 response_data = response.json()
@@ -457,7 +477,7 @@ class BAgent:
                     self.server_url,
                     e,
                 )
-                time.sleep(retry_sleep)
+                time.sleep(_retry_sleep_seconds(timeout, attempt))
 
         logger.error(
             "Max retries exceeded: Unable to fetch response from server for model=%r.",
@@ -541,12 +561,12 @@ class BAgent:
             headers["Authorization"] = f"Bearer {self.server_token}"
         tries, timeout = _apply_llm_query_overrides(tries, timeout)
         post_success_sleep = _env_float("LLM_QUERY_SUCCESS_SLEEP", 2.0)
-        retry_sleep = _env_float("LLM_QUERY_RETRY_SLEEP", timeout)
+        request_timeout = _build_request_timeout(timeout)
 
         for attempt in range(tries):
             try:
                 response = requests.post(
-                    self.server_url, headers=headers, json=payload, timeout=timeout
+                    self.server_url, headers=headers, json=payload, timeout=request_timeout
                 )
                 response.raise_for_status()
                 response_data = response.json()
@@ -564,7 +584,7 @@ class BAgent:
                     self.server_url,
                     e,
                 )
-                time.sleep(retry_sleep)
+                time.sleep(_retry_sleep_seconds(timeout, attempt))
 
         logger.error(
             "Max retries exceeded: Unable to fetch response from server for model=%r.",
