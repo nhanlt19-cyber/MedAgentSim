@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import threading
+import time
 from dataclasses import dataclass
 from typing import Iterable
 
@@ -63,6 +64,7 @@ class DetectionResult:
 class PromptInjectionDetector:
     _classifier = None
     _classifier_error: str | None = None
+    _classifier_error_at: float | None = None
     _lock = threading.Lock()
 
     def __init__(self, model_name: str | None = None, threshold: float | None = None) -> None:
@@ -116,19 +118,32 @@ class PromptInjectionDetector:
                 matched_patterns=[],
             )
         except Exception as exc:
+            self.__class__._classifier = None
             self.__class__._classifier_error = f"classifier_inference_failed: {exc}"
+            self.__class__._classifier_error_at = time.time()
             return None
 
     def _ensure_classifier(self):
         if self.__class__._classifier is not None:
             return self.__class__._classifier
-        if self.__class__._classifier_error is not None:
+        retry_interval = float(os.environ.get("PROMPT_GUARD_RETRY_INTERVAL", "60"))
+        last_error_at = self.__class__._classifier_error_at
+        if (
+            self.__class__._classifier_error is not None
+            and last_error_at is not None
+            and (time.time() - last_error_at) < max(0.0, retry_interval)
+        ):
             return None
 
         with self.__class__._lock:
             if self.__class__._classifier is not None:
                 return self.__class__._classifier
-            if self.__class__._classifier_error is not None:
+            last_error_at = self.__class__._classifier_error_at
+            if (
+                self.__class__._classifier_error is not None
+                and last_error_at is not None
+                and (time.time() - last_error_at) < max(0.0, retry_interval)
+            ):
                 return None
             try:
                 import torch
@@ -138,8 +153,8 @@ class PromptInjectionDetector:
                     pipeline,
                 )
 
-                tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-                model = AutoModelForSequenceClassification.from_pretrained(self.model_name)
+                tokenizer = self._load_tokenizer(AutoTokenizer)
+                model = self._load_model(AutoModelForSequenceClassification)
                 device = 0 if torch.cuda.is_available() else -1
                 self.__class__._classifier = pipeline(
                     "text-classification",
@@ -147,10 +162,29 @@ class PromptInjectionDetector:
                     tokenizer=tokenizer,
                     device=device,
                 )
+                self.__class__._classifier_error = None
+                self.__class__._classifier_error_at = None
             except Exception as exc:
                 self.__class__._classifier_error = f"classifier_unavailable: {exc}"
+                self.__class__._classifier_error_at = time.time()
                 return None
         return self.__class__._classifier
+
+    def _load_tokenizer(self, auto_tokenizer_cls):
+        try:
+            return auto_tokenizer_cls.from_pretrained(self.model_name)
+        except Exception as exc:
+            if not _looks_like_auth_or_gated_error(exc):
+                raise
+        return auto_tokenizer_cls.from_pretrained(self.model_name, local_files_only=True)
+
+    def _load_model(self, auto_model_cls):
+        try:
+            return auto_model_cls.from_pretrained(self.model_name)
+        except Exception as exc:
+            if not _looks_like_auth_or_gated_error(exc):
+                raise
+        return auto_model_cls.from_pretrained(self.model_name, local_files_only=True)
 
     def _detect_with_heuristics(self, text: str, source: str = "patient") -> DetectionResult:
         lowered = text.lower()
@@ -325,3 +359,17 @@ def _label_to_malicious_score(label: str, score: float) -> float:
 
 def _norm(text: str) -> str:
     return re.sub(r"\s+", " ", (text or "").strip().lower())
+
+
+def _looks_like_auth_or_gated_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    markers = (
+        "gated repo",
+        "cannot access gated repo",
+        "access to model",
+        "please log in",
+        "401 client error",
+        "403 client error",
+        "repository not found",
+    )
+    return any(marker in message for marker in markers)
