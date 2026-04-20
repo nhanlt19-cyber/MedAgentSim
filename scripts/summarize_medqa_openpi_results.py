@@ -143,6 +143,8 @@ def summarize_defense_events(events: list[dict]) -> dict:
         if not isinstance(event, dict):
             continue
         defense_name = str(event.get("defense") or defense_name or "none")
+        if event.get("detection_applicable", True) is False:
+            continue
         gt = event.get("ground_truth_malicious")
         flagged = bool(event.get("flagged"))
         if gt is True:

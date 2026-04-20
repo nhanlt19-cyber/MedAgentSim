@@ -147,7 +147,7 @@ def main() -> int:
     parser.add_argument(
         "--prompt-injection-defense",
         default=os.environ.get("PROMPT_INJECTION_DEFENSE", "none"),
-        help="Defense mode passed to medsim/main.py (e.g. none, llm_based).",
+        help="Defense mode passed to medsim/main.py (e.g. none, llm_based, known_answer, paraphrasing, retokenization, delimiters, sandwich, instructional, ppl, windowed_ppl, ppl-10-4.5, response_based, layered_guard).",
     )
     parser.add_argument("--dry-run", action="store_true", help="Print planned runs only.")
     args = parser.parse_args()
