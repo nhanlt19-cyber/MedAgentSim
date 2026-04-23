@@ -20,6 +20,9 @@ UNTRUSTED_SOURCES = {
     "patient_script",
     "human_patient",
     "measurement",
+    "measurement_attack",
+    "measurement_script",
+    "memory_attack",
 }
 
 

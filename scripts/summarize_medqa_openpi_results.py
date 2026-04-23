@@ -8,6 +8,7 @@ from pathlib import Path
 
 DEFAULT_ATTACKS = ("naive", "ignore", "escape", "fake_comp", "combine")
 DEFAULT_TIMINGS = ("late",)
+VALID_SURFACES = ("patient", "observation")
 
 
 def _default_cases_file(script_path: Path) -> Path:
@@ -110,7 +111,21 @@ def extract_case(run_dir: Path) -> dict:
     }
 
 
-def load_attack_target(script_input_dir: Path, scenario_id: int, attack: str, timing: str, fallback: str) -> str:
+def load_attack_target(
+    script_input_dir: Path,
+    scenario_id: int,
+    attack: str,
+    timing: str,
+    fallback: str,
+    *,
+    surface: str,
+    attacked_run: dict | None = None,
+) -> str:
+    if surface == "observation":
+        run_metadata = (attacked_run or {}).get("run_metadata") or {}
+        target = str(run_metadata.get("observation_attack_target") or fallback)
+        target = strip_diagnosis_ready_prefix(target)
+        return target or fallback
     script_path = script_input_dir / f"medqa_s{scenario_id}_attack_{attack}_{timing}.json"
     if not script_path.exists():
         return fallback
@@ -168,6 +183,7 @@ def summarize_group(rows: list[dict]) -> dict:
     total = len(rows)
     if total == 0:
         empty = {
+            "surface": "",
             "N": 0,
             "baseline_accuracy": 0.0,
             "attack_accuracy": 0.0,
@@ -227,6 +243,7 @@ def summarize_group(rows: list[dict]) -> dict:
     mr_proxy = asv
 
     return {
+        "surface": rows[0].get("surface", ""),
         "N": total,
         "baseline_accuracy": round(baseline_accuracy, 4),
         "attack_accuracy": round(attack_accuracy, 4),
@@ -305,6 +322,12 @@ def main() -> int:
     parser.add_argument("--scenarios", default="")
     parser.add_argument("--attacks", default=",".join(DEFAULT_ATTACKS))
     parser.add_argument("--timings", default=",".join(DEFAULT_TIMINGS))
+    parser.add_argument(
+        "--surface",
+        default="patient",
+        choices=VALID_SURFACES,
+        help="Benchmark surface to summarize: patient uses medqa_s*_attack_* outputs, observation uses s*_observation_* outputs.",
+    )
     parser.add_argument("--output-json", default="")
     parser.add_argument(
         "--show-openpi-metrics",
@@ -322,6 +345,7 @@ def main() -> int:
     scenario_ids = parse_scenarios(args.scenarios, list(case_map.keys()))
     attacks = parse_csv_arg(args.attacks, DEFAULT_ATTACKS)
     timings = parse_csv_arg(args.timings, DEFAULT_TIMINGS)
+    surface = args.surface
 
     details = []
     grouped = {}
@@ -335,23 +359,30 @@ def main() -> int:
                     raise ValueError(f"Scenario {scenario_id} not found in cases manifest")
 
                 baseline_dir = root / f"s{scenario_id}_baseline"
-                attack_dir = root / f"s{scenario_id}_attack_{attack}_{timing}"
+                attack_dir_name = (
+                    f"s{scenario_id}_attack_{attack}_{timing}"
+                    if surface == "patient"
+                    else f"s{scenario_id}_observation_{attack}_{timing}"
+                )
+                attack_dir = root / attack_dir_name
                 if not baseline_dir.exists() or not attack_dir.exists():
                     continue
 
                 baseline = extract_case(baseline_dir)
                 attacked = extract_case(attack_dir)
-                injected_only_dir = root / f"s{scenario_id}_injected_only_{attack}_{timing}"
-                injected_only = extract_case(injected_only_dir) if injected_only_dir.exists() else None
+                injected_only_dir = root / f"s{scenario_id}_injected_only_{attack}_{timing}" if surface == "patient" else None
+                injected_only = extract_case(injected_only_dir) if injected_only_dir is not None and injected_only_dir.exists() else None
                 target = load_attack_target(
                     script_input_dir,
                     scenario_id,
                     attack,
                     timing,
                     case["default_target"],
+                    surface=surface,
+                    attacked_run=attacked,
                 )
                 defense = attacked.get("defense") or baseline.get("defense") or "none"
-                group_key = f"{attack}:{timing}:{defense}"
+                group_key = f"{surface}:{attack}:{timing}:{defense}"
                 if group_key not in grouped:
                     grouped[group_key] = []
                 if injected_only is None:
@@ -364,6 +395,7 @@ def main() -> int:
                 combined_malicious_missed = attack_defense["malicious_missed"]
 
                 row = {
+                    "surface": surface,
                     "scenario_id": scenario_id,
                     "gold": case["gold_diagnosis"],
                     "attack": attack,
@@ -414,8 +446,8 @@ def main() -> int:
 
     summaries = []
     for group_key, rows in grouped.items():
-        attack, timing, defense = group_key.split(":", 2)
-        summary = {"attack": attack, "timing": timing, "defense": defense}
+        row_surface, attack, timing, defense = group_key.split(":", 3)
+        summary = {"surface": row_surface, "attack": attack, "timing": timing, "defense": defense}
         summary.update(summarize_group(rows))
         summaries.append(summary)
 
@@ -455,6 +487,7 @@ def main() -> int:
         "script_input_dir": str(script_input_dir),
         "attacks": attacks,
         "timings": timings,
+        "surface": surface,
         "scenario_ids_requested": scenario_ids,
         "num_scenarios_requested": len(scenario_ids),
         "num_detail_rows": len(details),
@@ -465,7 +498,7 @@ def main() -> int:
             "Each detail row is one (scenario, attack, timing) with both baseline and attack "
             "directories present. Injected-only directories are optional but required for true "
             "PNA-I and MR. Scenarios listed in missing_runs_by_attack_timing lack "
-            "s{sid}_baseline or s{sid}_attack_{attack}_{timing} under output_root."
+            "s{sid}_baseline or the surface-specific attack directory under output_root."
         ),
     }
 

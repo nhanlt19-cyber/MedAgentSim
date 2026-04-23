@@ -148,6 +148,7 @@ def main() -> int:
 
     summary_columns = [
         "source",
+        "surface",
         "attack",
         "timing",
         "defense",
@@ -172,6 +173,7 @@ def main() -> int:
     ]
     detail_columns = [
         "source",
+        "surface",
         "scenario_id",
         "attack",
         "timing",
