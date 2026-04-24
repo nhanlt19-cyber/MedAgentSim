@@ -950,6 +950,25 @@ class DoctorAgent:
             return f"```\n{question}\n```"
         return question
 
+    def _history_text(self) -> str:
+        # Clean legacy delimiters from old experiments so they cannot leak into prompts.
+        return (self.agent_hist or "").replace("q[[[]", "").strip()
+
+    def _append_doctor_turn_history(self, latest_input: str, doctor_answer: str) -> None:
+        latest_input = (latest_input or "").strip()
+        doctor_answer = (doctor_answer or "").strip()
+        parts: list[str] = []
+        if latest_input:
+            parts.append(f"Patient: {latest_input}")
+        if doctor_answer:
+            parts.append(f"Doctor: {doctor_answer}")
+        if not parts:
+            return
+        history = self._history_text()
+        if history:
+            history += "\n\n"
+        self.agent_hist = history + "\n".join(parts) + "\n\n"
+
     def _build_doctor_prompt(self, question: str, prompt_source: str, trusted_instruction: str = "") -> tuple[str, str]:
         system_prompt = self._build_defended_system_prompt(self.system_prompt())
         if self._structured_defense_enabled():
@@ -966,7 +985,7 @@ class DoctorAgent:
         latest_text = self._format_latest_untrusted_text(question)
         prompt = (
             "\nHere is a history of your dialogue: "
-            + self.agent_hist
+            + self._history_text()
             + "\n Here was the patient response: "
             + latest_text
             + "Now please continue your dialogue\nDoctor: "
@@ -1069,7 +1088,7 @@ class DoctorAgent:
             image_requested=image_requested,
             thread_id=thread_id,
         )
-        self.agent_hist += defended_question + "\n\n" + answer + "\n\nq[[[]"
+        self._append_doctor_turn_history(defended_question, answer)
         self._append_record("ExternalInput", defended_question, prompt_source, "untrusted")
         self._append_record("Doctor", answer, "doctor", "trusted")
         self.infs += 1
@@ -1116,7 +1135,7 @@ class DoctorAgent:
         else:
             discussion_prompt = (
                 f"Patient Statement: {latest_text}\n"
-                f"Additional Context: {self.agent_hist}\n"
+                f"Additional Context: {self._history_text()}\n"
                 f"Doctors, please discuss this case and refine your opinions based on the symptoms and test results. "
             )
             if self._defense_family() == "sandwich":
@@ -1130,7 +1149,7 @@ class DoctorAgent:
             responses.append(f"Doctor {i}: {response.strip()}")
 
         # Extract question from the discussion
-        question = extract_question(patient_statement, self.agent_hist, "\n".join(responses), self.backend)
+        question = extract_question(patient_statement, self._history_text(), "\n".join(responses), self.backend)
 
         # Generate candidate diagnoses from doctor discussion
         doctor_discussion = "\n".join(responses)
