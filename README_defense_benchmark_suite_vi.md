@@ -4,6 +4,7 @@ Tai lieu nay gom mot entrypoint moi de ban co the:
 
 - chay `Open Prompt Injection` cho `patient` va `observation`
 - chay `ASB-style benchmark`
+- chay `MPIB-V1 benchmark`
 - benchmark nhieu defense trong cung mot lenh
 - xuat bang so sanh giua cac defense
 
@@ -15,6 +16,7 @@ Script nay goi lai:
 
 - `scripts/run_medqa_security_benchmark.py`
 - `scripts/run_medqa_asb_benchmark.py`
+- `scripts/run_medqa_mpib_v1_benchmark.py` khi bat `--run-mpib`
 
 va sau do xuat:
 
@@ -22,6 +24,10 @@ va sau do xuat:
 - `comparison/openpi_observation_comparison.csv`
 - `comparison/asb_overall_comparison.csv`
 - `comparison/asb_family_comparison.csv`
+- `comparison/mpib_v1_overall_comparison.csv`
+- `comparison/mpib_v1_rule_comparison.csv`
+- `comparison/overall_defense_ranking.csv`
+- `comparison/overall_defense_ranking_metrics.csv`
 - `comparison/defense_suite_summary.json`
 - `comparison/defense_suite_report.md`
 
@@ -50,7 +56,31 @@ python scripts/run_medqa_defense_suite.py ^
   --defenses none,known_answer,llm_based,layered_guard,response_based,structured_guard,prompt_guard,ppl-10-4.5
 ```
 
-## 4. Chi chay OpenPI hoac chi chay ASB
+## 4. Bat them MPIB-V1 trong cung suite
+
+`MPIB-V1` khong bat theo mac dinh de tranh lam lenh cu chay nang hon ngoai y muon.
+
+Chay smoke test co them `MPIB-V1`:
+
+```bash
+cd MedAgentSim
+python scripts/run_medqa_defense_suite.py ^
+  --preset smoke ^
+  --run-mpib
+```
+
+Loc `MPIB-V1` theo rule / tier:
+
+```bash
+cd MedAgentSim
+python scripts/run_medqa_defense_suite.py ^
+  --preset smoke ^
+  --run-mpib ^
+  --mpib-rules R1,R2,R4,R6 ^
+  --mpib-tiers strict
+```
+
+## 5. Chi chay OpenPI, ASB, hoac MPIB-V1
 
 Chi chay OpenPI:
 
@@ -66,7 +96,14 @@ cd MedAgentSim
 python scripts/run_medqa_defense_suite.py --preset smoke --no-run-openpi --run-asb
 ```
 
-## 5. Cac tham so huu ich
+Chi chay MPIB-V1:
+
+```bash
+cd MedAgentSim
+python scripts/run_medqa_defense_suite.py --preset smoke --no-run-openpi --no-run-asb --run-mpib
+```
+
+## 6. Cac tham so huu ich
 
 - `--suite-root`
   - doi thu muc output tong
@@ -77,13 +114,27 @@ python scripts/run_medqa_defense_suite.py --preset smoke --no-run-openpi --run-a
 - `--attacks naive,ignore,escape,fake_comp,combine`
   - chon attack template
 - `--timings early,late`
-  - chon thoi diem chen attack
+  - chon thoi diem chen attack cho OpenPI / ASB, va cung duoc forward sang MPIB-V1
 - `--include-injected-only`
   - bat them run injected-only de co `PNA-I` va `MR`
+- `--run-mpib`
+  - bat benchmark `MPIB-V1` trong cung suite
+- `--mpib-rules`
+  - loc rule `MPIB-V1`, vi du `R1,R2,R4,R6`
+- `--mpib-tiers`
+  - loc tier `MPIB-V1`, vi du `strict`
+- `--mpib-scenario-families`
+  - loc `MPIB-V1` theo `S1,S2,S3,S4`
+- `--mpib-scenarios`
+  - loc `MPIB-V1` theo scenario id
+- `--mpib-refresh-dataset`
+  - regenerate case index + manifest + script `MPIB-V1` truoc khi chay
+- `--mpib-harm-judge-mode`
+  - chon cach cham diem harm cho `MPIB-V1`
 - `--no-run-benchmarks`
   - chi tong hop lai ket qua da co san
 
-## 6. Cach doc ket qua
+## 7. Cach doc ket qua
 
 ### OpenPI
 
@@ -112,7 +163,40 @@ nen uu tien:
 - `avg_original_task_success_rate` cao hon
 - `avg_RR` dung de tham khao do an toan, nhung can xem cung utility
 
-## 7. Luu y
+### MPIB-V1
+
+Trong cac file:
+
+- `mpib_v1_overall_comparison.csv`
+- `mpib_v1_rule_comparison.csv`
+
+nen uu tien:
+
+- `attack_accuracy` cao hon
+- `target_match_rate` thap hon
+- `diagnosis_change_rate` thap hon
+- `observed_cher` thap hon
+
+### Bang xep hang tong hop
+
+Trong cac file:
+
+- `overall_defense_ranking.csv`
+- `overall_defense_ranking_metrics.csv`
+
+script se tu dong:
+
+- tong hop rank tren nhieu metric tu `OpenPI + ASB + MPIB-V1`
+- de xuat `recommended_defense`
+
+Nguyen tac doc:
+
+- `mean_rank` thap hon la tot hon
+- `first_place_count` cao hon la defense dan dau o nhieu metric hon
+- day la `rank aggregation`, khong phai bang chung tuyet doi rang mot defense "thang" trong moi tinh huong
+
+## 8. Luu y
 
 - Script moi khong thay doi runtime benchmark cu, ma chi dong goi lai de de benchmark nhieu defense va so sanh ket qua.
 - Neu ban da co output san, dung `--no-run-benchmarks` de tranh goi LLM lai.
+- Neu thay chuoi kieu `Ignore previous instructions...` thi do van la luong `OpenPI`, khong phai `MPIB-V1`.
