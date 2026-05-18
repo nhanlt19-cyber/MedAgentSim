@@ -248,109 +248,255 @@ def rank_values(rows: list[dict[str, Any]], metric_key: str, ascending: bool) ->
     return ranked
 
 
-def build_overall_ranking(
+def collect_metric_specs(
+    profile: str,
     *,
-    defenses: list[str],
     openpi_rows_by_surface: dict[str, list[dict[str, Any]]],
     asb_overall_rows: list[dict[str, Any]],
     mpib_overall_rows: list[dict[str, Any]],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
-    metric_specs: list[dict[str, Any]] = []
+) -> list[dict[str, Any]]:
+    """Build per-metric ranking specs for balanced, safety-first, or utility-first profiles."""
+    specs: list[dict[str, Any]] = []
+
+    def add_openpi(surface: str, metric_key: str, label: str, ascending: bool) -> None:
+        specs.append(
+            {
+                "metric_group": f"openpi_{surface}",
+                "benchmark_group": "openpi",
+                "metric_key": metric_key,
+                "label": label,
+                "ascending": ascending,
+                "rows": openpi_rows_by_surface.get(surface, []),
+            }
+        )
 
     for surface in sorted(openpi_rows_by_surface.keys()):
-        metric_specs.extend(
+        if profile == "utility_priority":
+            add_openpi(surface, "avg_PNA_T", f"OpenPI {surface} PNA-T", False)
+            add_openpi(surface, "avg_attack_accuracy", f"OpenPI {surface} attack_accuracy", False)
+            add_openpi(surface, "avg_baseline_accuracy", f"OpenPI {surface} baseline_accuracy", False)
+        else:
+            add_openpi(surface, "avg_ASV", f"OpenPI {surface} ASV", True)
+            add_openpi(surface, "avg_accuracy_drop", f"OpenPI {surface} accuracy_drop", True)
+            add_openpi(surface, "avg_FPR", f"OpenPI {surface} FPR", True)
+            add_openpi(surface, "avg_FNR", f"OpenPI {surface} FNR", True)
+            if profile == "safety_priority":
+                add_openpi(surface, "avg_MR", f"OpenPI {surface} MR", False)
+
+    if profile == "utility_priority":
+        specs.extend(
             [
                 {
-                    "metric_group": f"openpi_{surface}",
-                    "benchmark_group": "openpi",
-                    "metric_key": "avg_ASV",
-                    "label": f"OpenPI {surface} ASV",
-                    "ascending": True,
-                    "rows": openpi_rows_by_surface.get(surface, []),
+                    "metric_group": "asb",
+                    "benchmark_group": "asb",
+                    "metric_key": "avg_original_task_success_rate",
+                    "label": "ASB task success",
+                    "ascending": False,
+                    "rows": asb_overall_rows,
                 },
                 {
-                    "metric_group": f"openpi_{surface}",
-                    "benchmark_group": "openpi",
-                    "metric_key": "avg_accuracy_drop",
-                    "label": f"OpenPI {surface} accuracy_drop",
+                    "metric_group": "asb",
+                    "benchmark_group": "asb",
+                    "metric_key": "avg_RR",
+                    "label": "ASB RR (lower = fewer refusals)",
                     "ascending": True,
-                    "rows": openpi_rows_by_surface.get(surface, []),
+                    "rows": asb_overall_rows,
                 },
                 {
-                    "metric_group": f"openpi_{surface}",
-                    "benchmark_group": "openpi",
-                    "metric_key": "avg_FPR",
-                    "label": f"OpenPI {surface} FPR",
+                    "metric_group": "asb",
+                    "benchmark_group": "asb",
+                    "metric_key": "avg_ASR",
+                    "label": "ASB avg_ASR",
                     "ascending": True,
-                    "rows": openpi_rows_by_surface.get(surface, []),
+                    "rows": asb_overall_rows,
+                },
+            ]
+        )
+    elif profile == "safety_priority":
+        specs.extend(
+            [
+                {
+                    "metric_group": "asb",
+                    "benchmark_group": "asb",
+                    "metric_key": "avg_ASR",
+                    "label": "ASB avg_ASR",
+                    "ascending": True,
+                    "rows": asb_overall_rows,
                 },
                 {
-                    "metric_group": f"openpi_{surface}",
-                    "benchmark_group": "openpi",
-                    "metric_key": "avg_FNR",
-                    "label": f"OpenPI {surface} FNR",
+                    "metric_group": "asb",
+                    "benchmark_group": "asb",
+                    "metric_key": "avg_RR",
+                    "label": "ASB RR (higher = more refusal / conservative)",
+                    "ascending": False,
+                    "rows": asb_overall_rows,
+                },
+            ]
+        )
+    else:
+        specs.extend(
+            [
+                {
+                    "metric_group": "asb",
+                    "benchmark_group": "asb",
+                    "metric_key": "avg_ASR",
+                    "label": "ASB avg_ASR",
                     "ascending": True,
-                    "rows": openpi_rows_by_surface.get(surface, []),
+                    "rows": asb_overall_rows,
+                },
+                {
+                    "metric_group": "asb",
+                    "benchmark_group": "asb",
+                    "metric_key": "avg_original_task_success_rate",
+                    "label": "ASB utility",
+                    "ascending": False,
+                    "rows": asb_overall_rows,
                 },
             ]
         )
 
-    metric_specs.extend(
-        [
-            {
-                "metric_group": "asb",
-                "benchmark_group": "asb",
-                "metric_key": "avg_ASR",
-                "label": "ASB avg_ASR",
-                "ascending": True,
-                "rows": asb_overall_rows,
-            },
-            {
-                "metric_group": "asb",
-                "benchmark_group": "asb",
-                "metric_key": "avg_original_task_success_rate",
-                "label": "ASB utility",
-                "ascending": False,
-                "rows": asb_overall_rows,
-            },
-            {
-                "metric_group": "mpib_v1",
-                "benchmark_group": "mpib",
-                "metric_key": "attack_accuracy",
-                "label": "MPIB-V1 attack_accuracy",
-                "ascending": False,
-                "rows": mpib_overall_rows,
-            },
-            {
-                "metric_group": "mpib_v1",
-                "benchmark_group": "mpib",
-                "metric_key": "target_match_rate",
-                "label": "MPIB-V1 target_match_rate",
-                "ascending": True,
-                "rows": mpib_overall_rows,
-            },
-            {
-                "metric_group": "mpib_v1",
-                "benchmark_group": "mpib",
-                "metric_key": "diagnosis_change_rate",
-                "label": "MPIB-V1 diagnosis_change_rate",
-                "ascending": True,
-                "rows": mpib_overall_rows,
-            },
-            {
-                "metric_group": "mpib_v1",
-                "benchmark_group": "mpib",
-                "metric_key": "observed_cher",
-                "label": "MPIB-V1 observed_cher",
-                "ascending": True,
-                "rows": mpib_overall_rows,
-            },
-        ]
-    )
+    if profile == "utility_priority":
+        specs.extend(
+            [
+                {
+                    "metric_group": "mpib_v1",
+                    "benchmark_group": "mpib",
+                    "metric_key": "attack_accuracy",
+                    "label": "MPIB-V1 attack_accuracy",
+                    "ascending": False,
+                    "rows": mpib_overall_rows,
+                },
+                {
+                    "metric_group": "mpib_v1",
+                    "benchmark_group": "mpib",
+                    "metric_key": "baseline_accuracy",
+                    "label": "MPIB-V1 baseline_accuracy",
+                    "ascending": False,
+                    "rows": mpib_overall_rows,
+                },
+                {
+                    "metric_group": "mpib_v1",
+                    "benchmark_group": "mpib",
+                    "metric_key": "accuracy_drop",
+                    "label": "MPIB-V1 accuracy_drop",
+                    "ascending": True,
+                    "rows": mpib_overall_rows,
+                },
+                {
+                    "metric_group": "mpib_v1",
+                    "benchmark_group": "mpib",
+                    "metric_key": "diagnosis_change_rate",
+                    "label": "MPIB-V1 diagnosis_change_rate",
+                    "ascending": True,
+                    "rows": mpib_overall_rows,
+                },
+            ]
+        )
+    elif profile == "safety_priority":
+        specs.extend(
+            [
+                {
+                    "metric_group": "mpib_v1",
+                    "benchmark_group": "mpib",
+                    "metric_key": "target_match_rate",
+                    "label": "MPIB-V1 target_match_rate",
+                    "ascending": True,
+                    "rows": mpib_overall_rows,
+                },
+                {
+                    "metric_group": "mpib_v1",
+                    "benchmark_group": "mpib",
+                    "metric_key": "observed_cher",
+                    "label": "MPIB-V1 observed_cher",
+                    "ascending": True,
+                    "rows": mpib_overall_rows,
+                },
+                {
+                    "metric_group": "mpib_v1",
+                    "benchmark_group": "mpib",
+                    "metric_key": "avg_observed_severity",
+                    "label": "MPIB-V1 avg_observed_severity",
+                    "ascending": True,
+                    "rows": mpib_overall_rows,
+                },
+                {
+                    "metric_group": "mpib_v1",
+                    "benchmark_group": "mpib",
+                    "metric_key": "diagnosis_change_rate",
+                    "label": "MPIB-V1 diagnosis_change_rate",
+                    "ascending": True,
+                    "rows": mpib_overall_rows,
+                },
+                {
+                    "metric_group": "mpib_v1",
+                    "benchmark_group": "mpib",
+                    "metric_key": "observed_h2_rate",
+                    "label": "MPIB-V1 observed_h2_rate",
+                    "ascending": True,
+                    "rows": mpib_overall_rows,
+                },
+                {
+                    "metric_group": "mpib_v1",
+                    "benchmark_group": "mpib",
+                    "metric_key": "observed_h3_rate",
+                    "label": "MPIB-V1 observed_h3_rate",
+                    "ascending": True,
+                    "rows": mpib_overall_rows,
+                },
+            ]
+        )
+    else:
+        specs.extend(
+            [
+                {
+                    "metric_group": "mpib_v1",
+                    "benchmark_group": "mpib",
+                    "metric_key": "attack_accuracy",
+                    "label": "MPIB-V1 attack_accuracy",
+                    "ascending": False,
+                    "rows": mpib_overall_rows,
+                },
+                {
+                    "metric_group": "mpib_v1",
+                    "benchmark_group": "mpib",
+                    "metric_key": "target_match_rate",
+                    "label": "MPIB-V1 target_match_rate",
+                    "ascending": True,
+                    "rows": mpib_overall_rows,
+                },
+                {
+                    "metric_group": "mpib_v1",
+                    "benchmark_group": "mpib",
+                    "metric_key": "diagnosis_change_rate",
+                    "label": "MPIB-V1 diagnosis_change_rate",
+                    "ascending": True,
+                    "rows": mpib_overall_rows,
+                },
+                {
+                    "metric_group": "mpib_v1",
+                    "benchmark_group": "mpib",
+                    "metric_key": "observed_cher",
+                    "label": "MPIB-V1 observed_cher",
+                    "ascending": True,
+                    "rows": mpib_overall_rows,
+                },
+            ]
+        )
 
+    return specs
+
+
+def aggregate_ranking_from_specs(
+    defenses: list[str],
+    metric_specs: list[dict[str, Any]],
+    *,
+    ranking_profile: str,
+    reason: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     scorecard: dict[str, dict[str, Any]] = {
         defense: {
             "defense": defense,
+            "ranking_profile": ranking_profile,
             "metrics_used": 0,
             "rank_sum": 0.0,
             "first_place_count": 0,
@@ -380,6 +526,7 @@ def build_overall_ranking(
                 scorecard[defense]["first_place_count"] += 1
             metric_ranking_rows.append(
                 {
+                    "ranking_profile": ranking_profile,
                     "metric_group": spec["metric_group"],
                     "metric": spec["label"],
                     "metric_key": spec["metric_key"],
@@ -408,15 +555,33 @@ def build_overall_ranking(
     )
 
     recommendation = {
+        "ranking_profile": ranking_profile,
         "recommended_defense": overall_rows[0]["defense"] if overall_rows else "",
-        "reason": (
-            "lowest mean rank across the selected OpenPI, ASB, and MPIB-V1 metrics"
-            if overall_rows
-            else "no ranking data available"
-        ),
+        "reason": reason if overall_rows else "no ranking data available",
         "metrics_considered": sorted({row["metric"] for row in metric_ranking_rows}),
     }
     return overall_rows, metric_ranking_rows, recommendation
+
+
+def build_overall_ranking(
+    *,
+    defenses: list[str],
+    openpi_rows_by_surface: dict[str, list[dict[str, Any]]],
+    asb_overall_rows: list[dict[str, Any]],
+    mpib_overall_rows: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    specs = collect_metric_specs(
+        "balanced",
+        openpi_rows_by_surface=openpi_rows_by_surface,
+        asb_overall_rows=asb_overall_rows,
+        mpib_overall_rows=mpib_overall_rows,
+    )
+    return aggregate_ranking_from_specs(
+        defenses,
+        specs,
+        ranking_profile="balanced",
+        reason="lowest mean rank across balanced OpenPI, ASB, and MPIB-V1 metrics",
+    )
 
 
 def build_markdown_report(
@@ -426,9 +591,8 @@ def build_markdown_report(
     asb_family_rows: list[dict[str, Any]],
     mpib_overall_rows: list[dict[str, Any]],
     mpib_by_rule_rows: list[dict[str, Any]],
-    ranking_rows: list[dict[str, Any]],
+    ranking_profiles: dict[str, tuple[list[dict[str, Any]], dict[str, Any]]],
     ranking_metric_rows: list[dict[str, Any]],
-    ranking_recommendation: dict[str, Any],
     suite_root: Path,
     openpi_reports_root: Path,
     asb_reports_root: Path,
@@ -445,6 +609,8 @@ def build_markdown_report(
         "- MPIB-V1: higher `attack_accuracy` is better, while lower `target_match_rate`, `diagnosis_change_rate`, and `observed_cher` is better.",
         "- `avg_RR` is useful for safety comparison, but a higher refusal rate may also mean more over-defense.",
         "- Composite ranking: lower `mean_rank` is better. It is a cross-benchmark rank aggregation, not a causal proof of overall best defense.",
+        "- **Ưu tiên an toàn**: tập trung ASV/FPR/FNR/accuracy_drop (OpenPI), ASR thấp và RR cao (ASB), cùng các chỉ số tổn hại lâm sàng MPIB-V1 (CHER, độ nghiêm trọng, tỷ lệ khớp mục tiêu).",
+        "- **Ưu tiên utility**: tập trung PNA-T và độ chính xác dưới tấn công (OpenPI), tỷ lệ hoàn thành nhiệm vụ và RR thấp (ASB), độ chính xác baseline/attack và mức sụt giảm (MPIB-V1).",
         "",
         f"- Suite root: `{suite_root}`",
         f"- OpenPI root: `{openpi_reports_root}`",
@@ -453,12 +619,24 @@ def build_markdown_report(
         "",
     ]
 
-    if ranking_rows:
+    ranking_section_titles = {
+        "balanced": "## Overall ranking (cân bằng)",
+        "safety_priority": "## Bảng xếp hạng ưu tiên an toàn",
+        "utility_priority": "## Bảng xếp hạng ưu tiên utility",
+    }
+    for profile_key in ("balanced", "safety_priority", "utility_priority"):
+        block = ranking_profiles.get(profile_key)
+        if not block:
+            continue
+        ranking_rows, ranking_recommendation = block
+        if not ranking_rows:
+            continue
+        title = ranking_section_titles.get(profile_key, f"## Ranking ({profile_key})")
         lines.extend(
             [
-                "## Overall Ranking",
+                title,
                 "",
-                f"Recommended defense: `{ranking_recommendation.get('recommended_defense', '')}`",
+                f"Gợi ý phòng thủ: `{ranking_recommendation.get('recommended_defense', '')}` — {ranking_recommendation.get('reason', '')}",
                 "",
                 markdown_table(
                     ranking_rows,
@@ -582,11 +760,12 @@ def build_markdown_report(
     if ranking_metric_rows:
         lines.extend(
             [
-                "## Ranking Metrics",
+                "## Ranking Metrics (all profiles)",
                 "",
                 markdown_table(
                     ranking_metric_rows,
                     [
+                        "ranking_profile",
                         "metric_group",
                         "metric",
                         "defense",
@@ -864,6 +1043,12 @@ def main() -> int:
     ranking_rows: list[dict[str, Any]] = []
     ranking_metric_rows: list[dict[str, Any]] = []
     ranking_recommendation: dict[str, Any] = {}
+    ranking_rows_safety: list[dict[str, Any]] = []
+    ranking_metric_rows_safety: list[dict[str, Any]] = []
+    ranking_recommendation_safety: dict[str, Any] = {}
+    ranking_rows_utility: list[dict[str, Any]] = []
+    ranking_metric_rows_utility: list[dict[str, Any]] = []
+    ranking_recommendation_utility: dict[str, Any] = {}
 
     if args.run_openpi:
         for surface in openpi_surfaces:
@@ -912,6 +1097,39 @@ def main() -> int:
         asb_overall_rows=asb_overall_rows,
         mpib_overall_rows=mpib_overall_rows,
     )
+    ranking_rows_safety, ranking_metric_rows_safety, ranking_recommendation_safety = (
+        aggregate_ranking_from_specs(
+            defenses,
+            collect_metric_specs(
+                "safety_priority",
+                openpi_rows_by_surface=openpi_rows_by_surface,
+                asb_overall_rows=asb_overall_rows,
+                mpib_overall_rows=mpib_overall_rows,
+            ),
+            ranking_profile="safety_priority",
+            reason=(
+                "thấp nhất mean_rank trên tập chỉ số ưu tiên an toàn "
+                "(OpenPI: ASV/FPR/FNR/MR; ASB: ASR thấp, RR cao; MPIB-V1: tổn hại & khớp mục tiêu thấp)"
+            ),
+        )
+    )
+    ranking_rows_utility, ranking_metric_rows_utility, ranking_recommendation_utility = (
+        aggregate_ranking_from_specs(
+            defenses,
+            collect_metric_specs(
+                "utility_priority",
+                openpi_rows_by_surface=openpi_rows_by_surface,
+                asb_overall_rows=asb_overall_rows,
+                mpib_overall_rows=mpib_overall_rows,
+            ),
+            ranking_profile="utility_priority",
+            reason=(
+                "thấp nhất mean_rank trên tập chỉ số ưu tiên utility "
+                "(OpenPI: PNA-T/độ chính xác; ASB: task success cao, RR thấp; MPIB-V1: độ chính xác & ít sụt giảm)"
+            ),
+        )
+    )
+    ranking_metric_rows_all = ranking_metric_rows + ranking_metric_rows_safety + ranking_metric_rows_utility
 
     comparison_root.mkdir(parents=True, exist_ok=True)
     for surface, rows in openpi_rows_by_surface.items():
@@ -927,8 +1145,12 @@ def main() -> int:
         write_csv(comparison_root / "mpib_v1_rule_comparison.csv", mpib_by_rule_rows)
     if ranking_rows:
         write_csv(comparison_root / "overall_defense_ranking.csv", ranking_rows)
-    if ranking_metric_rows:
-        write_csv(comparison_root / "overall_defense_ranking_metrics.csv", ranking_metric_rows)
+    if ranking_rows_safety:
+        write_csv(comparison_root / "overall_defense_ranking_safety_priority.csv", ranking_rows_safety)
+    if ranking_rows_utility:
+        write_csv(comparison_root / "overall_defense_ranking_utility_priority.csv", ranking_rows_utility)
+    if ranking_metric_rows_all:
+        write_csv(comparison_root / "overall_defense_ranking_metrics.csv", ranking_metric_rows_all)
 
     summary_payload = {
         "suite_root": str(suite_root),
@@ -954,7 +1176,15 @@ def main() -> int:
                 "suite_summary": str(mpib_root / "comparison" / "mpib_v1_benchmark_summary.json"),
             } if mpib_overall_rows or mpib_by_rule_rows else {},
             "overall_ranking": str(comparison_root / "overall_defense_ranking.csv") if ranking_rows else "",
-            "overall_ranking_metrics": str(comparison_root / "overall_defense_ranking_metrics.csv") if ranking_metric_rows else "",
+            "overall_ranking_safety_priority": str(comparison_root / "overall_defense_ranking_safety_priority.csv")
+            if ranking_rows_safety
+            else "",
+            "overall_ranking_utility_priority": str(comparison_root / "overall_defense_ranking_utility_priority.csv")
+            if ranking_rows_utility
+            else "",
+            "overall_ranking_metrics": str(comparison_root / "overall_defense_ranking_metrics.csv")
+            if ranking_metric_rows_all
+            else "",
             "report_md": str(comparison_root / "defense_suite_report.md"),
         },
         "openpi_ranked_rows": openpi_rows_by_surface,
@@ -963,13 +1193,26 @@ def main() -> int:
         "mpib_overall_ranked_rows": mpib_overall_rows,
         "mpib_by_rule_rows": mpib_by_rule_rows,
         "overall_defense_ranking": ranking_rows,
-        "overall_defense_ranking_metrics": ranking_metric_rows,
+        "overall_defense_ranking_safety_priority": ranking_rows_safety,
+        "overall_defense_ranking_utility_priority": ranking_rows_utility,
+        "overall_defense_ranking_metrics": ranking_metric_rows_all,
         "recommended_defense": ranking_recommendation,
+        "recommended_defense_safety_priority": ranking_recommendation_safety,
+        "recommended_defense_utility_priority": ranking_recommendation_utility,
         "notes": {
             "openpi_sort_order": "sorted by avg_ASV asc, then avg_accuracy_drop asc, then avg_FNR asc",
             "asb_sort_order": "sorted by avg_ASR asc, then avg_original_task_success_rate desc",
             "mpib_sort_order": "sorted by attack_accuracy desc, then target_match_rate asc, then diagnosis_change_rate asc",
             "overall_ranking_method": "rank aggregation across selected OpenPI, ASB, and MPIB-V1 metrics; lower mean_rank is better",
+            "overall_ranking_safety_priority": (
+                "OpenPI: ASV, accuracy_drop, FPR, FNR (asc), MR (desc); "
+                "ASB: ASR (asc), RR (desc); MPIB-V1: target_match, CHER, severity, diagnosis_change, H2/H3 rates (asc)"
+            ),
+            "overall_ranking_utility_priority": (
+                "OpenPI: PNA-T, attack_accuracy, baseline_accuracy (desc); "
+                "ASB: task success (desc), RR (asc), ASR (asc); "
+                "MPIB-V1: attack_accuracy, baseline_accuracy (desc), accuracy_drop, diagnosis_change (asc)"
+            ),
             "ranking_caution": "No single scalar score is imposed because safer defenses may trade off refusal rate and task utility differently.",
         },
     }
@@ -982,9 +1225,12 @@ def main() -> int:
         asb_family_rows=asb_family_rows,
         mpib_overall_rows=mpib_overall_rows,
         mpib_by_rule_rows=mpib_by_rule_rows,
-        ranking_rows=ranking_rows,
-        ranking_metric_rows=ranking_metric_rows,
-        ranking_recommendation=ranking_recommendation,
+        ranking_profiles={
+            "balanced": (ranking_rows, ranking_recommendation),
+            "safety_priority": (ranking_rows_safety, ranking_recommendation_safety),
+            "utility_priority": (ranking_rows_utility, ranking_recommendation_utility),
+        },
+        ranking_metric_rows=ranking_metric_rows_all,
         suite_root=suite_root,
         openpi_reports_root=openpi_root,
         asb_reports_root=asb_root,

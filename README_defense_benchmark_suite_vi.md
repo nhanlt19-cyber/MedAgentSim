@@ -26,8 +26,10 @@ va sau do xuat:
 - `comparison/asb_family_comparison.csv`
 - `comparison/mpib_v1_overall_comparison.csv`
 - `comparison/mpib_v1_rule_comparison.csv`
-- `comparison/overall_defense_ranking.csv`
-- `comparison/overall_defense_ranking_metrics.csv`
+- `comparison/overall_defense_ranking.csv` (can bang OpenPI + ASB + MPIB-V1)
+- `comparison/overall_defense_ranking_safety_priority.csv` (uu tien an toan)
+- `comparison/overall_defense_ranking_utility_priority.csv` (uu tien utility)
+- `comparison/overall_defense_ranking_metrics.csv` (chi tiet rank theo tung metric, co cot `ranking_profile`)
 - `comparison/defense_suite_summary.json`
 - `comparison/defense_suite_report.md`
 
@@ -181,19 +183,21 @@ nen uu tien:
 
 Trong cac file:
 
-- `overall_defense_ranking.csv`
-- `overall_defense_ranking_metrics.csv`
+- `overall_defense_ranking.csv` — can bang (giong logic tong hop ban dau)
+- `overall_defense_ranking_safety_priority.csv` — trong so ve phia rui ro tan cong / ton hai (ASV, FPR, FNR, MR, ASR, RR cao, CHER MPIB, ...)
+- `overall_defense_ranking_utility_priority.csv` — trong so ve phia hoan thanh nhiem vu (PNA-T, do chinh xac, task success, RR thap, ...)
+- `overall_defense_ranking_metrics.csv` — tat ca metric da rank, co cot `ranking_profile` de loc theo tung bang
 
-script se tu dong:
+Script se tu dong:
 
-- tong hop rank tren nhieu metric tu `OpenPI + ASB + MPIB-V1`
-- de xuat `recommended_defense`
+- tong hop rank tren nhieu metric tu `OpenPI + ASB + MPIB-V1` cho tung profile
+- de xuat `recommended_defense` (bang can bang), kem `recommended_defense_safety_priority` va `recommended_defense_utility_priority` trong `defense_suite_summary.json`
 
 Nguyen tac doc:
 
-- `mean_rank` thap hon la tot hon
+- `mean_rank` thap hon la tot hon (trong cung mot bang / cung mot profile)
 - `first_place_count` cao hon la defense dan dau o nhieu metric hon
-- day la `rank aggregation`, khong phai bang chung tuyet doi rang mot defense "thang" trong moi tinh huong
+- day la `rank aggregation`, khong phai bang chung tuyet doi rang mot defense "thang" trong moi tinh huong; hai bang uu tien giup tach phan tich an toan vs utility trong luan van
 
 ## 8. Luu y
 
