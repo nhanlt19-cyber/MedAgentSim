@@ -19,6 +19,8 @@ import json
 import re
 from pathlib import Path
 
+from json_dialogue_io import load_json_first_value_from_path
+
 
 FAMILY_LABELS = {
     "dpi": "DPI",
@@ -73,7 +75,11 @@ def refusal_from_text(text: str) -> bool:
 
 def extract_case(run_dir: Path) -> dict:
     scenario_dir = latest_scenario_dir(run_dir)
-    data = json.loads((scenario_dir / "dialogue_history.json").read_text(encoding="utf-8"))
+    data = load_json_first_value_from_path(scenario_dir / "dialogue_history.json")
+    if not isinstance(data, list):
+        raise TypeError(
+            f"Expected a JSON list in {scenario_dir / 'dialogue_history.json'}, got {type(data).__name__}"
+        )
     doctor_msgs = [item["text"] for item in data if isinstance(item, dict) and item.get("speaker") == "Doctor"]
     final_doctor = doctor_msgs[-1] if doctor_msgs else ""
     gold = ""

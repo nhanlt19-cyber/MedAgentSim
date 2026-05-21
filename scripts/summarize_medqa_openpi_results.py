@@ -5,6 +5,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from json_dialogue_io import load_json_first_value_from_path
+
 
 DEFAULT_ATTACKS = ("naive", "ignore", "escape", "fake_comp", "combine")
 DEFAULT_TIMINGS = ("late",)
@@ -74,7 +76,11 @@ def latest_scenario_dir(run_dir: Path) -> Path:
 
 def extract_case(run_dir: Path) -> dict:
     scenario_dir = latest_scenario_dir(run_dir)
-    data = json.loads((scenario_dir / "dialogue_history.json").read_text(encoding="utf-8"))
+    data = load_json_first_value_from_path(scenario_dir / "dialogue_history.json")
+    if not isinstance(data, list):
+        raise TypeError(
+            f"Expected a JSON list in {scenario_dir / 'dialogue_history.json'}, got {type(data).__name__}"
+        )
     doctor_msgs = [item["text"] for item in data if isinstance(item, dict) and item.get("speaker") == "Doctor"]
     patient_msgs = [item["text"] for item in data if isinstance(item, dict) and item.get("speaker") == "Patient"]
     run_metadata = {}
