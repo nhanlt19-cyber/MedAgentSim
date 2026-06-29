@@ -78,8 +78,16 @@ class PromptInjectionDetector:
             else os.environ.get("PROMPT_GUARD_THRESHOLD", "0.5")
         )
 
-    def detect(self, text: str, source: str = "patient") -> DetectionResult:
+    def detect(
+        self,
+        text: str,
+        source: str = "patient",
+        threshold: float | None = None,
+    ) -> DetectionResult:
         text = (text or "").strip()
+        effective_threshold = float(
+            threshold if threshold is not None else self.threshold
+        )
         if not text:
             return DetectionResult(
                 flagged=False,
@@ -89,13 +97,21 @@ class PromptInjectionDetector:
                 matched_patterns=[],
             )
 
-        model_result = self._detect_with_specialized_model(text)
+        model_result = self._detect_with_specialized_model(text, effective_threshold)
         if model_result is not None:
             return model_result
 
-        return self._detect_with_heuristics(text, source=source)
+        return self._detect_with_heuristics(
+            text,
+            source=source,
+            threshold=effective_threshold,
+        )
 
-    def _detect_with_specialized_model(self, text: str) -> DetectionResult | None:
+    def _detect_with_specialized_model(
+        self,
+        text: str,
+        threshold: float,
+    ) -> DetectionResult | None:
         classifier = self._ensure_classifier()
         if classifier is None:
             return None
@@ -112,7 +128,7 @@ class PromptInjectionDetector:
                 malicious_scores.append(malicious_score)
                 raw_chunks.append(f"{label}:{score:.4f}")
             risk_score = max(malicious_scores) if malicious_scores else 0.0
-            flagged = risk_score >= self.threshold
+            flagged = risk_score >= threshold
             return DetectionResult(
                 flagged=flagged,
                 risk_score=risk_score,
@@ -189,7 +205,13 @@ class PromptInjectionDetector:
                 raise
         return auto_model_cls.from_pretrained(self.model_name, local_files_only=True)
 
-    def _detect_with_heuristics(self, text: str, source: str = "patient") -> DetectionResult:
+    def _detect_with_heuristics(
+        self,
+        text: str,
+        source: str = "patient",
+        threshold: float | None = None,
+    ) -> DetectionResult:
+        effective_threshold = float(threshold if threshold is not None else self.threshold)
         lowered = text.lower()
         score = 0.0
         matched: list[str] = []
@@ -222,7 +244,7 @@ class PromptInjectionDetector:
             backend = f"{backend} ({self.__class__._classifier_error})"
 
         return DetectionResult(
-            flagged=score >= self.threshold,
+            flagged=score >= effective_threshold,
             risk_score=score,
             detector_backend=backend,
             detector_raw="heuristic score",
@@ -257,6 +279,79 @@ def sanitize_untrusted_text(source: str) -> str:
         f"[Potential prompt injection removed from {clean_source.lower()} content. "
         "Retain only previously established clinical evidence and continue safely.]"
     )
+
+
+_INJECTION_LINE_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
+    re.compile(pattern, flags=re.IGNORECASE)
+    for pattern, _, _ in _HEURISTIC_RULES
+)
+
+
+def detection_threshold_for_source(source: str) -> float:
+    normalized = (source or "patient").strip().lower()
+    if "memory" in normalized:
+        return float(os.environ.get("PROMPT_GUARD_THRESHOLD_MEMORY", "0.45"))
+    if "measurement" in normalized:
+        return float(os.environ.get("PROMPT_GUARD_THRESHOLD_MEASUREMENT", "0.70"))
+    return float(os.environ.get("PROMPT_GUARD_THRESHOLD_PATIENT", "0.55"))
+
+
+def partial_redact_injection_lines(text: str) -> str:
+    lines = (text or "").splitlines()
+    if not lines:
+        return text or ""
+
+    kept: list[str] = []
+    for line in lines:
+        if any(pattern.search(line) for pattern in _INJECTION_LINE_PATTERNS):
+            continue
+        kept.append(line)
+
+    redacted = "\n".join(kept).strip()
+    if redacted:
+        return redacted
+    return text
+
+
+def layered_should_full_block(result: DetectionResult) -> bool:
+    hard_threshold = float(os.environ.get("LAYERED_GUARD_HARD_BLOCK_THRESHOLD", "0.72"))
+    if result.risk_score < hard_threshold:
+        return False
+    if result.matched_patterns:
+        return True
+    return result.detector_backend == "prompt_guard_classifier"
+
+
+def layered_apply_input_defense(
+    text: str,
+    source: str,
+    detector: PromptInjectionDetector,
+) -> tuple[str, dict]:
+    threshold = detection_threshold_for_source(source)
+    result = detector.detect(text, source=source, threshold=threshold)
+    event: dict = {
+        "action": "allowed",
+        "detection_applicable": True,
+        "detection_threshold": round(threshold, 4),
+        **result.to_event_fields(),
+    }
+
+    if not result.flagged:
+        return text, event
+
+    redacted = partial_redact_injection_lines(text)
+    if layered_should_full_block(result) and (not redacted.strip() or redacted == text):
+        event["action"] = "blocked"
+        event["sanitized_prompt"] = sanitize_untrusted_text(source)
+        return event["sanitized_prompt"], event
+
+    if redacted != text:
+        event["action"] = "partial_redact"
+        event["redacted_prompt"] = redacted
+        return redacted, event
+
+    event["action"] = "soft_flag"
+    return text, event
 
 
 def serialize_history(records: list[dict]) -> str:

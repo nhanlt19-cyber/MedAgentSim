@@ -1,5 +1,7 @@
 # Tài liệu MedAgentSim (tiếng Việt)
 
+> **Tài liệu tổng hợp workspace** (multi-agent + OpenPI + ASB + MPIB + defense): [../README_TONG_HOP_DU_AN_VI.md](../README_TONG_HOP_DU_AN_VI.md)
+
 Dự án **MedAgentSim: Self-Evolving Multi-Agent Simulations for Realistic Clinical Interactions** được mô tả và hướng dẫn qua **hai file README** riêng:
 
 ---
