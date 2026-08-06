@@ -578,6 +578,12 @@ class DoctorAgent:
         )
 
     def _defense_family(self) -> str:
+        """Normalize CLI aliases and parameterized PPL specs.
+
+        All later defense branches use these canonical names.  Keeping this
+        mapping in one place lets benchmark scripts accept the naming used by
+        both OpenPI (hyphenated) and MedAgentSim (underscored).
+        """
         raw = (self.prompt_injection_defense or "").strip().lower()
         aliases = {
             "": "none",
@@ -828,6 +834,14 @@ class DoctorAgent:
         return answer
 
     def _apply_prompt_injection_defense(self, question: str, prompt_source: str = "patient") -> tuple[str, dict | None]:
+        """Apply the selected input defense and emit a comparable audit event.
+
+        Detection defenses may replace malicious text with a safe placeholder;
+        transformation defenses rewrite the text; prompt-structure and
+        response-based defenses defer their main work to later pipeline stages.
+        Every non-disabled mode returns metadata consumed by the benchmark
+        summarizers to calculate actions, false positives, and false negatives.
+        """
         defense = self._defense_family()
         if defense == "none":
             return question, None
